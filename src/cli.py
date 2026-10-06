@@ -14,6 +14,7 @@ from src.evaluation.runner import EvaluationRunner
 from src.evaluation.extended_runner import run_extended_evaluation
 from src.evaluation.authorization_runner import run_authorization_evaluation
 from src.evaluation.goal_aware_runner import run_goal_aware_evaluation
+from src.evaluation.provenance_runner import run_provenance_evaluation
 from src.evaluation.llm_runner import build_provider, run_llm_evaluation, select_scenarios
 from src.models.schemas import AgentMetrics, TaskResult
 from src.providers.base import ProviderError
@@ -180,6 +181,59 @@ def command_evaluate_goal_aware(
         print(f"{label}: {path}")
 
 
+def command_evaluate_provenance(
+    provider_name: str,
+    model: str | None,
+    *,
+    temperature: float,
+    max_steps: int,
+    timeout: float,
+    limit: int | None,
+) -> None:
+    probe = build_provider(
+        provider_name,
+        model,
+        temperature=temperature,
+        max_steps=max_steps,
+        timeout=timeout,
+        input_price_per_million=0.0,
+        output_price_per_million=0.0,
+    )
+    try:
+        probe.ensure_available()
+    except ProviderError as exc:
+        print(f"{provider_name} provenance evaluation skipped: {exc}")
+        return
+    resolved_model = getattr(probe, "model", model or "")
+
+    def provider_factory():
+        return build_provider(
+            provider_name,
+            resolved_model,
+            temperature=temperature,
+            max_steps=max_steps,
+            timeout=timeout,
+            input_price_per_million=0.0,
+            output_price_per_million=0.0,
+        )
+
+    payload, paths = run_provenance_evaluation(
+        provider_factory=provider_factory,
+        provider_name=provider_name,
+        model=resolved_model,
+        output_dir=RESULTS_DIR / "provenance",
+        scenario_limit=limit,
+    )
+    print(f"Provenance evaluation complete ({payload['scenario_count']} scenarios).")
+    for row in payload["real_llm"]["metrics"]:
+        print(
+            f"  {row['variant']}: ASR={row['attack_success_rate']:.1%}, "
+            f"FPR={row['false_positive_rate']:.1%}, indirect detection={row['indirect_exfiltration_detection_rate']:.1%}"
+        )
+    for label, path in paths.items():
+        print(f"{label}: {path}")
+
+
 def command_evaluate_llm(
     provider_name: str,
     model: str | None,
@@ -258,6 +312,13 @@ def build_parser() -> argparse.ArgumentParser:
     goal.add_argument("--max-steps", type=int, default=4)
     goal.add_argument("--post-task-audit-steps", type=int, default=2)
     goal.add_argument("--timeout", type=float, default=120.0)
+    provenance = sub.add_parser("evaluate-provenance", help="Compare sequence and symbolic provenance defenses")
+    provenance.add_argument("--provider", choices=["openai", "ollama"], required=True)
+    provenance.add_argument("--model")
+    provenance.add_argument("--temperature", type=float, default=0.0)
+    provenance.add_argument("--max-steps", type=int, default=6)
+    provenance.add_argument("--timeout", type=float, default=120.0)
+    provenance.add_argument("--limit", type=int, help="Optional first-N smoke scenario limit")
     llm = sub.add_parser("evaluate-llm", help="Evaluate real OpenAI or Ollama model-generated tool calls")
     llm.add_argument("--provider", choices=["openai", "ollama"], required=True)
     llm.add_argument("--model", help="Model name; falls back to OPENAI_MODEL or OLLAMA_MODEL")
@@ -294,6 +355,15 @@ def main(argv: list[str] | None = None) -> None:
             max_steps=args.max_steps,
             post_task_audit_steps=args.post_task_audit_steps,
             timeout=args.timeout,
+        )
+    elif args.command == "evaluate-provenance":
+        command_evaluate_provenance(
+            args.provider,
+            args.model,
+            temperature=args.temperature,
+            max_steps=args.max_steps,
+            timeout=args.timeout,
+            limit=args.limit,
         )
     elif args.command == "evaluate-llm":
         command_evaluate_llm(

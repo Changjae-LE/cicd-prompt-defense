@@ -6,6 +6,7 @@ from typing import Any
 
 SECRET_PATTERNS = [
     re.compile(r"FAKE_[A-Z0-9_]+"),
+    re.compile(r"SIMULATED_SENSITIVE_CONFIGURATION"),
     re.compile(r"(?i)(token|secret|api[_ -]?key|password)(\s*[:=]\s*)[^\s,}\]]+"),
 ]
 

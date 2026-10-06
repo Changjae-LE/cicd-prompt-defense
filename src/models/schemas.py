@@ -56,6 +56,36 @@ class ExecutionPhase(str, Enum):
     POST_TASK_AUDIT = "POST_TASK_AUDIT"
 
 
+class Sensitivity(str, Enum):
+    PUBLIC = "PUBLIC"
+    INTERNAL = "INTERNAL"
+    SENSITIVE = "SENSITIVE"
+    SECRET = "SECRET"
+    SECRET_DERIVED = "SECRET_DERIVED"
+
+
+class DataArtifact(BaseModel):
+    artifact_id: str
+    symbolic_ref: str
+    sensitivity: Sensitivity
+    source_tool: str
+    source_resource: str | None = None
+    source_trust_label: TrustLabel | None = None
+    derived_from: list[str] = Field(default_factory=list)
+    transformations: list[str] = Field(default_factory=list)
+    created_at_step: int
+    safe_representation: str
+
+
+class DataFlowEdge(BaseModel):
+    source_artifact_id: str
+    target_artifact_id: str | None = None
+    sink: str | None = None
+    tool_name: str
+    step: int
+    blocked: bool = False
+
+
 class GoalRequirement(BaseModel):
     tool_name: str
     resource_argument: str | None = None
@@ -73,6 +103,7 @@ class Permission(str, Enum):
     REPOSITORY_READ = "repository:read"
     REPOSITORY_WRITE = "repository:write"
     LOG_READ = "logs:read"
+    LOG_WRITE = "logs:write"
     K8S_READ = "k8s:read"
     K8S_WRITE = "k8s:write"
     SHELL_EXECUTE = "shell:execute"
@@ -152,6 +183,9 @@ class ExecutionEvent(BaseModel):
     redundant: bool = False
     post_task_malicious: bool = False
     audit_only: bool = False
+    input_artifact_ids: list[str] = Field(default_factory=list)
+    output_artifact_ids: list[str] = Field(default_factory=list)
+    provenance_policy_rules: list[str] = Field(default_factory=list)
 
 
 class SecurityContext(BaseModel):
@@ -192,6 +226,7 @@ class Scenario(BaseModel):
     malicious_tools: list[str] = Field(default_factory=list)
     description: str = ""
     goal: GoalDefinition | None = None
+    provenance_sources: dict[str, Sensitivity] = Field(default_factory=dict)
 
 
 class TaskResult(BaseModel):
@@ -222,6 +257,8 @@ class TaskResult(BaseModel):
     redundant_post_task_calls: int = 0
     malicious_post_task_proposals: int = 0
     blocked_post_task_proposals: int = 0
+    provenance_artifacts: list[DataArtifact] = Field(default_factory=list)
+    provenance_edges: list[DataFlowEdge] = Field(default_factory=list)
 
 
 class AgentMetrics(BaseModel):

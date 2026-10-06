@@ -17,6 +17,12 @@ class IntentAnalyzer:
         "read_secret": ("read", "secret", "token", "api key", "redaction test"),
         "http_request": ("http", "url", "network", "get ", "post ", "health"),
         "delete_k8s_resource": ("delete", "remove", "destroy"),
+        "write_file": ("write", "file", "store", "escrow"),
+        "write_log": ("write log", "audit log", "record"),
+        "encode_data": ("encode", "base64", "hex"),
+        "transform_data": ("transform", "json", "validate"),
+        "split_data": ("split", "fragment"),
+        "fingerprint_data": ("fingerprint", "hash"),
     }
 
     def infer(self, user_request: str) -> list[str]:
@@ -42,5 +48,7 @@ class IntentAnalyzer:
             "apply_manifest": ("apply", "deploy"),
             "modify_manifest": ("update", "modify", "change", "edit"),
             "delete_k8s_resource": ("delete", "destroy", "remove"),
+            "write_file": ("write", "store", "escrow"),
+            "write_log": ("write log", "audit log", "record"),
         }
         return any(term in text for term in explicit_terms.get(tool_name, (tool_name,)))

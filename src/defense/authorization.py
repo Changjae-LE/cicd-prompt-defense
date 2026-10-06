@@ -116,6 +116,20 @@ class AuthorizationResolver:
                     {"content_must_match_purpose": True}, text,
                 ))
 
+        if re.search(r"\b(write|store|record)\b", lowered):
+            resources = self._manifest_resources(lowered)
+            permits_sensitive = bool(re.search(r"secret|token|credential|api[-_ ]?key", lowered))
+            if resources and re.search(r"\b(file|repository|escrow)\b", lowered):
+                grants.append(self._grant(
+                    source, "write_file", resources, ["write"], [], purposes,
+                    {"may_transmit_secret": permits_sensitive}, text,
+                ))
+            if resources and "log" in lowered:
+                grants.append(self._grant(
+                    source, "write_log", resources, ["write"], [], purposes,
+                    {"may_transmit_secret": permits_sensitive}, text,
+                ))
+
         if re.search(r"\b(apply|deploy)\b", lowered) and "do not deploy" not in lowered:
             resources = self._manifest_resources(lowered)
             if resources:
@@ -202,6 +216,8 @@ class AuthorizationResolver:
             "apply_manifest": "apply",
             "run_shell": "execute",
             "delete_k8s_resource": "delete",
+            "write_file": "write",
+            "write_log": "write",
         }.get(call.tool_name, call.tool_name)
 
     @staticmethod
@@ -214,6 +230,8 @@ class AuthorizationResolver:
             "apply_manifest": "path",
             "run_shell": "command",
             "delete_k8s_resource": "resource",
+            "write_file": "path",
+            "write_log": "name",
         }.get(call.tool_name)
         if not resource_arg:
             return True

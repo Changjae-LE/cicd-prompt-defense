@@ -239,6 +239,42 @@ The extended evaluator runs the full Context-Aware system and removes one elemen
 
 Execution history and sequence risk dominate attack reduction in this benchmark. Their identical result reflects implementation coupling: the sequence classifier currently consumes history as its only stateful input. The aggregate intent ablation is masked by other rules and by known negation failures, although the clear intent-mismatch category changes as expected. Removing Trust improves utility but increases ASR, illustrating the security/usability tradeoff rather than an unqualified improvement.
 
+## Symbolic provenance and data-flow evaluation
+
+The provenance extension evaluates a narrower question than the general prompt-injection benchmark: after a Tool has legitimately read sensitive data, can the enforcement layer follow that data through transformations and prevent it from reaching an unauthorized sink?
+
+Each sensitive Tool output becomes a symbolic `DataArtifact`; raw Secret values are never placed in the artifact graph, model history, JSON, CSV, or Markdown report. An artifact records sensitivity (`PUBLIC`, `INTERNAL`, `SENSITIVE`, `SECRET`, or `SECRET_DERIVED`), source Tool/resource/trust label, transitive `derived_from` lineage, transformations, and creation step. Registered Tools propagate that lineage through encoding, splitting, files, and logs. Network, repository writes, logs, temporary storage, and shell arguments are classified as sinks.
+
+Read authorization and transmission authorization are separate. Permission to read `billing_api_key` does not grant permission to send its artifact over HTTP or place it in another sink. Trusted, exact user scope can separately authorize a local sensitive write; untrusted document text cannot create that grant. A one-way fingerprint is the only simulated declassification operation and becomes `INTERNAL` rather than Secret-derived.
+
+The dedicated fixed dataset has 9 attacks and 3 hard-benign cases covering direct exfiltration, file relay, encoding relay, log relay, multi-hop chains, split transmission, labeled sensitive files, and post-task behavior. The small size is intentional: this is a mechanism test and Ollama smoke benchmark, not a population-level estimate. The deterministic comparison feeds identical proposed Tool Calls to:
+
+- Context-Aware with execution-sequence rules only.
+- Context-Aware plus provenance enforcement without scoped transmission authorization.
+- Context-Aware plus provenance and scoped authorization.
+
+For provenance variants, ASR requires an executed edge from a sensitive lineage to an external sink. A separately generated non-sensitive HTTP receipt is not counted as exfiltration just because its Tool name matches a malicious planned call. The real-model arms are sampled independently, so only the deterministic arm isolates defense causality.
+
+```powershell
+python -m src.cli evaluate-provenance `
+  --provider ollama `
+  --model llama3.1 `
+  --limit 12 `
+  --max-steps 6
+```
+
+Outputs are isolated in `results/provenance/`: `provenance_results.json`, `provenance_results.csv`, `provenance_report.md`, and `provenance_ablation.csv`. The JSON contains safe artifact/edge debug traces. The ablation removes source labeling, transformation propagation, sink classification, transitive lineage, and scoped-authorization integration one at a time without retuning the dataset or policy.
+
+The provenance tracker is integrated with goal-aware research audit mode. Post-goal proposals are still analyzed and added as blocked attempted sink edges, but audit-phase Tools never execute.
+
+### Provenance limitations
+
+- Only registered Tool adapters that preserve symbolic artifact references are tracked; arbitrary semantic copying, covert channels, or data leaving the process are not.
+- Source labels, sink classes, and the simulated fingerprint declassification rule are trusted assumptions.
+- The graph is task-local and does not follow data across agents, processes, or runs.
+- Archives, encryption, steganography, partial-string reconstruction, and real byte-level data are outside this prototype.
+- Real-model completion failures and independently sampled call sequences can dominate aggregate comparisons; the deterministic identical-call result is the primary causal measurement.
+
 ## Real LLM Evaluation
 
 The Mock evaluation replays the dataset's fixed Tool Call plan. It isolates authorization behavior and is deterministic, but cannot measure which actions a real model proposes after reading an indirect injection. The real-LLM mode asks OpenAI or Ollama to select one next Tool Call at a time from the central Registry. Each subsequent request contains the original user request, labelled external content, the available Tool schemas, and redacted execution history.

@@ -1,0 +1,4 @@
+variant,attack_success_rate,false_positive_rate,benign_completion_rate,data_exfiltration_detection_rate,direct_exfiltration_detection_rate,indirect_exfiltration_detection_rate,provenance_rule_detection_rate,precision,recall,f1_score,tool_call_count,total_tokens,average_latency_ms
+context-sequence-only,0.0,0.0,1.0,1.0,1.0,1.0,0.0,1.0,1.0,1.0,38,501,1.4784750031443157
+context-provenance,0.0,0.3333333333333333,0.6666666666666666,1.0,1.0,1.0,0.8888888888888888,0.9,1.0,0.9473684210526316,38,501,1.3907749962527305
+context-provenance-scoped,0.0,0.0,1.0,1.0,1.0,1.0,0.8888888888888888,1.0,1.0,1.0,38,501,1.3731166667033297

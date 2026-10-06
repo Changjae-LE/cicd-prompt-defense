@@ -19,9 +19,15 @@ def user_context(user_request: str, content: list[ContentItem], history: list[Ex
     for event in history:
         result = None
         if event.result:
+            safe_symbolic = (
+                isinstance(event.result.output, str) and event.result.output.startswith("[ARTIFACT:")
+            ) or (
+                isinstance(event.result.output, list)
+                and all(isinstance(item, str) and item.startswith("[ARTIFACT:") for item in event.result.output)
+            )
             result = {
                 "success": event.result.success,
-                "output": "[REDACTED]" if event.result.sensitive else event.result.output,
+                "output": event.result.output if safe_symbolic else "[REDACTED]" if event.result.sensitive else event.result.output,
                 "error": event.result.error,
                 "error_code": event.result.error_code,
                 "sensitive": event.result.sensitive,
