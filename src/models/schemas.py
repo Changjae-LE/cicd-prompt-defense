@@ -28,6 +28,20 @@ class Decision(str, Enum):
     REQUIRE_APPROVAL = "REQUIRE_APPROVAL"
 
 
+class TerminationReason(str, Enum):
+    TASK_COMPLETED = "TASK_COMPLETED"
+    ATTACK_SUCCEEDED = "ATTACK_SUCCEEDED"
+    SECURITY_BLOCK = "SECURITY_BLOCK"
+    RESOURCE_NOT_FOUND = "RESOURCE_NOT_FOUND"
+    INVALID_TOOL = "INVALID_TOOL"
+    INVALID_ARGUMENTS = "INVALID_ARGUMENTS"
+    PARSING_ERROR = "PARSING_ERROR"
+    PROVIDER_ERROR = "PROVIDER_ERROR"
+    REPEATED_FAILED_TOOL_CALL = "REPEATED_FAILED_TOOL_CALL"
+    MAX_STEPS = "MAX_STEPS"
+    MODEL_STOPPED = "MODEL_STOPPED"
+
+
 class Permission(str, Enum):
     REPOSITORY_READ = "repository:read"
     REPOSITORY_WRITE = "repository:write"
@@ -37,6 +51,23 @@ class Permission(str, Enum):
     SHELL_EXECUTE = "shell:execute"
     SECRET_READ = "secret:read"
     NETWORK_ACCESS = "network:access"
+
+
+class AuthorizationSource(str, Enum):
+    EXPLICIT_USER_AUTHORIZATION = "EXPLICIT_USER_AUTHORIZATION"
+    DERIVED_TASK_AUTHORIZATION = "DERIVED_TASK_AUTHORIZATION"
+    UNTRUSTED_CONTENT_REQUEST = "UNTRUSTED_CONTENT_REQUEST"
+
+
+class UserAuthorization(BaseModel):
+    source: AuthorizationSource
+    allowed_tools: list[str] = Field(default_factory=list)
+    allowed_resources: list[str] = Field(default_factory=list)
+    allowed_actions: list[str] = Field(default_factory=list)
+    allowed_destinations: list[str] = Field(default_factory=list)
+    allowed_purposes: list[str] = Field(default_factory=list)
+    constraints: dict[str, Any] = Field(default_factory=dict)
+    evidence: str = ""
 
 
 class ContentItem(BaseModel):
@@ -55,6 +86,7 @@ class ToolMetadata(BaseModel):
     accesses_network: bool = False
     executes_command: bool = False
     allowed_argument_patterns: dict[str, str] = Field(default_factory=dict)
+    allowed_argument_values: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class ToolCall(BaseModel):
@@ -70,6 +102,7 @@ class ToolResult(BaseModel):
     success: bool
     output: Any = None
     error: str | None = None
+    error_code: str | None = None
     accessed_resources: list[str] = Field(default_factory=list)
     sensitive: bool = False
 
@@ -85,6 +118,8 @@ class ExecutionEvent(BaseModel):
     intent_mismatch: bool = False
     privilege_escalation: bool = False
     data_exfiltration_pattern: bool = False
+    authorization_scope_match: bool = False
+    authorization_source: AuthorizationSource | None = None
 
 
 class SecurityContext(BaseModel):
@@ -99,6 +134,7 @@ class SecurityContext(BaseModel):
     requested_permissions: list[Permission]
     security_policy: dict[str, Any]
     resource_risk_level: RiskLevel
+    user_authorizations: list[UserAuthorization] = Field(default_factory=list)
 
 
 class SecurityDecision(BaseModel):
@@ -109,6 +145,8 @@ class SecurityDecision(BaseModel):
     intent_mismatch: bool = False
     privilege_escalation: bool = False
     data_exfiltration_pattern: bool = False
+    authorization_scope_match: bool = False
+    authorization_source: AuthorizationSource | None = None
 
 
 class Scenario(BaseModel):
@@ -130,6 +168,7 @@ class TaskResult(BaseModel):
     final_result: str
     events: list[ExecutionEvent]
     suspicious_content_detected: bool = False
+    raw_suspicious_content_detected: bool = False
     task_completed: bool = False
     attack_succeeded: bool = False
     llm_calls: int = 0
@@ -141,6 +180,8 @@ class TaskResult(BaseModel):
     llm_latency_ms: float = 0.0
     estimated_cost_usd: float = 0.0
     provider_error: str | None = None
+    provider_error_code: str | None = None
+    termination_reason: TerminationReason = TerminationReason.MODEL_STOPPED
     latency_ms: float = 0.0
 
 

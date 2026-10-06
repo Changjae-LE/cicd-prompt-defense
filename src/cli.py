@@ -12,6 +12,7 @@ from src.evaluation.metrics import calculate_metrics
 from src.evaluation.reports import write_reports
 from src.evaluation.runner import EvaluationRunner
 from src.evaluation.extended_runner import run_extended_evaluation
+from src.evaluation.authorization_runner import run_authorization_evaluation
 from src.evaluation.llm_runner import build_provider, run_llm_evaluation, select_scenarios
 from src.models.schemas import AgentMetrics, TaskResult
 from src.providers.base import ProviderError
@@ -115,6 +116,21 @@ def command_evaluate_extended(write_traces: bool = False) -> None:
     print(f"Report: {paths['report']}")
 
 
+def command_evaluate_authorization() -> None:
+    payload, paths = run_authorization_evaluation(RESULTS_DIR)
+    print(f"Scoped authorization evaluation complete ({payload['scenario_count']} unchanged extended scenarios).")
+    for item in payload["metrics"]:
+        print(
+            f"  {item['agent']}: ASR={item['attack_success_rate']:.1%}, "
+            f"FPR={item['false_positive_rate']:.1%}, F1={item['f1_score']:.1%}, "
+            f"benign completion={item['benign_completion_rate']:.1%}"
+        )
+    print(f"Authorization abuse cases: {len(payload['authorization_abuse_scenarios'])}")
+    print(f"JSON: {paths['json']}")
+    print(f"CSV: {paths['csv']}")
+    print(f"Report: {paths['report']}")
+
+
 def command_evaluate_llm(
     provider_name: str,
     model: str | None,
@@ -184,6 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("report", help="Regenerate the Markdown/CSV report from JSON")
     extended = sub.add_parser("evaluate-extended", help="Run the extended fairness and ablation evaluation")
     extended.add_argument("--write-traces", action="store_true", help="Write per-task redacted traces")
+    sub.add_parser("evaluate-authorization", help="Compare legacy and scoped Context-Aware authorization")
     llm = sub.add_parser("evaluate-llm", help="Evaluate real OpenAI or Ollama model-generated tool calls")
     llm.add_argument("--provider", choices=["openai", "ollama"], required=True)
     llm.add_argument("--model", help="Model name; falls back to OPENAI_MODEL or OLLAMA_MODEL")
@@ -209,6 +226,8 @@ def main(argv: list[str] | None = None) -> None:
         command_report()
     elif args.command == "evaluate-extended":
         command_evaluate_extended(args.write_traces)
+    elif args.command == "evaluate-authorization":
+        command_evaluate_authorization()
     elif args.command == "evaluate-llm":
         command_evaluate_llm(
             args.provider,

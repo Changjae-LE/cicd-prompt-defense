@@ -23,6 +23,7 @@ def user_context(user_request: str, content: list[ContentItem], history: list[Ex
                 "success": event.result.success,
                 "output": "[REDACTED]" if event.result.sensitive else event.result.output,
                 "error": event.result.error,
+                "error_code": event.result.error_code,
                 "sensitive": event.result.sensitive,
             }
         events.append({

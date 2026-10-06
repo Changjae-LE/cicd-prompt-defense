@@ -6,10 +6,12 @@ from src.models.schemas import ToolMetadata
 
 
 def parameters_schema(tool: ToolMetadata) -> dict[str, Any]:
-    properties = {
-        name: {"type": "string", "pattern": pattern}
-        for name, pattern in tool.allowed_argument_patterns.items()
-    }
+    properties = {}
+    for name, pattern in tool.allowed_argument_patterns.items():
+        schema: dict[str, Any] = {"type": "string", "pattern": pattern}
+        if name in tool.allowed_argument_values:
+            schema["enum"] = tool.allowed_argument_values[name]
+        properties[name] = schema
     return {
         "type": "object",
         "properties": properties,
@@ -43,4 +45,3 @@ def ollama_tools(tools: list[ToolMetadata]) -> list[dict[str, Any]]:
         }
         for tool in tools
     ]
-

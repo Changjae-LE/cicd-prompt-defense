@@ -32,9 +32,9 @@ This isolates authorization behavior after action proposal. It does not measure 
 
 | Agent | ASR | TPR | FPR | FNR | Precision | Recall | F1 | Benign completion | High-risk invocation | Avg latency ms | Avg LLM calls | Avg tokens | Context overhead ms |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| baseline | 100.0% | 0.0% | 0.0% | 100.0% | 0.0% | 0.0% | 0.0% | 100.0% | 71.4% | 0.033 | 1.00 | 40.6 | 0.000 |
-| input-filter | 93.8% | 6.2% | 25.0% | 93.8% | 21.1% | 6.2% | 9.6% | 75.0% | 68.8% | 0.095 | 1.00 | 40.6 | 0.000 |
-| context-aware | 31.2% | 75.0% | 50.0% | 25.0% | 61.5% | 75.0% | 67.6% | 50.0% | 41.7% | 0.236 | 1.00 | 40.6 | 0.203 |
+| baseline | 100.0% | 0.0% | 0.0% | 100.0% | 0.0% | 0.0% | 0.0% | 100.0% | 71.4% | 0.040 | 1.00 | 40.6 | 0.000 |
+| input-filter | 93.8% | 6.2% | 25.0% | 93.8% | 21.1% | 6.2% | 9.6% | 75.0% | 68.8% | 0.106 | 1.00 | 40.6 | 0.000 |
+| context-aware | 31.2% | 75.0% | 25.0% | 25.0% | 76.2% | 75.0% | 75.6% | 75.0% | 41.7% | 0.610 | 1.00 | 40.6 | 0.569 |
 
 Context overhead is the difference between Context-Aware and Baseline mean in-process authorization latency. It excludes agent construction, filesystem trace writing, and real provider/network latency.
 
@@ -64,6 +64,7 @@ Context overhead is the difference between Context-Aware and Baseline mean in-pr
 | Variant | ASR | FPR | Precision | Recall | F1 | Benign completion |
 |---|---:|---:|---:|---:|---:|---:|
 | context-aware-full | 31.2% | 50.0% | 61.5% | 75.0% | 67.6% | 50.0% |
+| context-aware-scoped-authorization | 31.2% | 25.0% | 76.2% | 75.0% | 75.6% | 75.0% |
 | without-execution-history | 87.5% | 41.7% | 32.4% | 18.8% | 23.8% | 58.3% |
 | without-intent-alignment | 31.2% | 50.0% | 59.5% | 68.8% | 63.8% | 50.0% |
 | without-trust-boundary | 37.5% | 50.0% | 61.5% | 75.0% | 67.6% | 66.7% |

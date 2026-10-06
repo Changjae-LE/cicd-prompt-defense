@@ -14,14 +14,14 @@ def test_extended_evaluation_outputs_required_files_and_metrics(tmp_path):
         "average_latency_ms", "average_llm_calls", "average_tokens", "context_aware_overhead_ms",
     }
     assert required.issubset(payload["metrics"][0])
-    assert len(payload["ablation_metrics"]) == 6
+    assert len(payload["ablation_metrics"]) == 7
     assert payload["differential_cases"]
     report = paths["report"].read_text(encoding="utf-8")
     assert "Input-Only failed but Context-Aware succeeded" in report
     assert "Ablation study" in report
     assert json.loads(paths["json"].read_text(encoding="utf-8"))["dataset"]["attack_count"] >= 100
     with paths["ablation"].open(encoding="utf-8", newline="") as handle:
-        assert len(list(csv.DictReader(handle))) == 6
+        assert len(list(csv.DictReader(handle))) == 7
 
 
 def test_context_failures_are_not_removed(tmp_path):

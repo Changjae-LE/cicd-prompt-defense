@@ -10,6 +10,8 @@ from src.models.schemas import ContentItem, ExecutionEvent, ToolCall, ToolMetada
 class ProviderError(RuntimeError):
     """Safe provider failure; no tool should execute because of this error."""
 
+    error_code = "PROVIDER_ERROR"
+
 
 class ProviderConfigurationError(ProviderError):
     pass
@@ -20,7 +22,15 @@ class ProviderConnectionError(ProviderError):
 
 
 class ProviderResponseError(ProviderError):
-    pass
+    error_code = "PARSING_ERROR"
+
+
+class InvalidToolError(ProviderResponseError):
+    error_code = "INVALID_TOOL"
+
+
+class ParsingError(ProviderResponseError):
+    error_code = "PARSING_ERROR"
 
 
 @dataclass

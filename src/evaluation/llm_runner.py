@@ -13,7 +13,7 @@ from src.evaluation.extended_dataset import extended_dataset_fingerprint, load_e
 from src.evaluation.llm_reports import write_llm_outputs
 from src.evaluation.metrics import calculate_metrics
 from src.utils.redaction import redact
-from src.models.schemas import RiskLevel, Scenario, TaskResult
+from src.models.schemas import RiskLevel, Scenario, TaskResult, TerminationReason
 from src.providers.base import LLMProvider
 from src.providers.ollama_provider import OllamaProvider
 from src.providers.openai_provider import OpenAIProvider
@@ -27,6 +27,11 @@ AGENT_CLASSES = {
     "context-aware": ContextAwareAgent,
 }
 
+INFRASTRUCTURE_FAILURES = {
+    "RESOURCE_NOT_FOUND", "INVALID_TOOL", "INVALID_ARGUMENTS", "PARSING_ERROR", "PROVIDER_ERROR",
+    "REPEATED_FAILED_TOOL_CALL", "MAX_STEPS",
+}
+
 
 def select_scenarios(limit: int | None = None) -> list[Scenario]:
     all_scenarios = load_extended_scenarios()
@@ -38,12 +43,36 @@ def select_scenarios(limit: int | None = None) -> list[Scenario]:
     benign = [item for item in all_scenarios if item.kind == "benign"]
     attack_count = (limit + 1) // 2
     benign_count = limit // 2
+    attacks = _diverse_take(attacks, attack_count)
+    benign = _diverse_take(benign, benign_count)
     selected: list[Scenario] = []
     for index in range(max(attack_count, benign_count)):
         if index < attack_count:
             selected.append(attacks[index])
         if index < benign_count:
             selected.append(benign[index])
+    return selected
+
+
+def _diverse_take(scenarios: list[Scenario], count: int) -> list[Scenario]:
+    """Deterministic category round-robin used by smoke-test limits."""
+    buckets: dict[str, list[Scenario]] = {}
+    for scenario in scenarios:
+        buckets.setdefault(scenario.category, []).append(scenario)
+    selected: list[Scenario] = []
+    depth = 0
+    while len(selected) < count:
+        added = False
+        for category in buckets:
+            items = buckets[category]
+            if depth < len(items):
+                selected.append(items[depth])
+                added = True
+                if len(selected) == count:
+                    break
+        if not added:
+            break
+        depth += 1
     return selected
 
 
@@ -97,6 +126,8 @@ def _failure_record(run: int, scenario: Scenario, result: TaskResult, model: str
                 "decision": event.decision.value,
                 "risk_score": event.risk_score,
                 "rules": event.triggered_policy_rules,
+                "authorization_scope_match": event.authorization_scope_match,
+                "authorization_source": event.authorization_source.value if event.authorization_source else None,
             }
             for event in result.events
         ],
@@ -106,13 +137,43 @@ def _failure_record(run: int, scenario: Scenario, result: TaskResult, model: str
                 "attempted": event.executed,
                 "success": bool(event.result and event.result.success),
                 "error": event.result.error if event.result else None,
+                "error_code": event.result.error_code if event.result else None,
             }
             for event in result.events
         ],
         "attack_succeeded": result.attack_succeeded,
         "task_completed": result.task_completed,
         "provider_error": result.provider_error,
+        "provider_error_code": result.provider_error_code,
+        "termination_reason": result.termination_reason.value,
     })
+
+
+def _event_trace(result: TaskResult) -> dict[str, Any]:
+    return {
+        "model_generated_tool_calls": [event.tool_call.model_dump(mode="json") for event in result.events],
+        "security_decisions": [
+            {
+                "tool": event.tool_call.tool_name,
+                "decision": event.decision.value,
+                "risk_score": event.risk_score,
+                "rules": event.triggered_policy_rules,
+                "authorization_scope_match": event.authorization_scope_match,
+                "authorization_source": event.authorization_source.value if event.authorization_source else None,
+            }
+            for event in result.events
+        ],
+        "final_tool_execution": [
+            {
+                "tool": event.tool_call.tool_name,
+                "attempted": event.executed,
+                "success": bool(event.result and event.result.success),
+                "error": event.result.error if event.result else None,
+                "error_code": event.result.error_code if event.result else None,
+            }
+            for event in result.events
+        ],
+    }
 
 
 def run_llm_evaluation(
@@ -158,6 +219,7 @@ def run_llm_evaluation(
             run_results: list[TaskResult] = []
             for scenario in scenarios:
                 environment = FakeEnvironment()
+                environment.seed_external_content(scenario.external_content)
                 registry = build_default_registry(environment)
                 agent = agent_class(registry, new_provider())
                 result = agent.run(scenario)
@@ -179,8 +241,15 @@ def run_llm_evaluation(
                     "token_usage_estimated": result.token_usage_estimated,
                     "latency_ms": result.latency_ms,
                     "provider_error": result.provider_error,
+                    "provider_error_code": result.provider_error_code,
+                    "termination_reason": result.termination_reason.value,
+                    **_event_trace(result),
                 })
-                if result.attack_succeeded or (scenario.kind == "benign" and not result.task_completed) or result.provider_error:
+                if (
+                    result.attack_succeeded
+                    or (scenario.kind == "benign" and not result.task_completed)
+                    or result.termination_reason.value in INFRASTRUCTURE_FAILURES
+                ):
                     failures.append(_failure_record(run_index, scenario, result, model))
             per_run_metrics[agent_name].append(
                 calculate_metrics(agent_name, run_results, scenarios, registry_for_metrics).model_dump(mode="json")
@@ -191,6 +260,17 @@ def run_llm_evaluation(
         results = by_agent_results[agent_name]
         run_rows = per_run_metrics[agent_name]
         total_events = sum(len(result.events) for result in results)
+        termination_counts: dict[str, int] = defaultdict(int)
+        for result in results:
+            termination_counts[result.termination_reason.value] += 1
+        infrastructure_count = sum(count for reason, count in termination_counts.items() if reason in INFRASTRUCTURE_FAILURES)
+        security_block_count = termination_counts.get("SECURITY_BLOCK", 0)
+        kind_by_id = {scenario.id: scenario.kind for scenario in scenarios}
+        benign_results = [result for result in results if kind_by_id[result.scenario_id] == "benign"]
+        evaluable_benign = [
+            result for result in benign_results
+            if result.termination_reason.value not in INFRASTRUCTURE_FAILURES
+        ]
         high_risk = sum(
             1 for result in results for event in result.events
             if event.executed and registry_for_metrics.metadata(event.tool_call.tool_name).risk_level in {RiskLevel.HIGH, RiskLevel.CRITICAL}
@@ -219,6 +299,14 @@ def run_llm_evaluation(
             "average_latency_ms": statistics.mean(result.latency_ms for result in results) if results else 0.0,
             "llm_latency_ms": sum(result.llm_latency_ms for result in results),
             "estimated_api_cost_usd": sum(result.estimated_cost_usd for result in results),
+            "infrastructure_failure_count": infrastructure_count,
+            "infrastructure_failure_rate": infrastructure_count / max(1, len(results)),
+            "security_block_count": security_block_count,
+            "security_block_rate": security_block_count / max(1, len(results)),
+            "evaluable_benign_completion_rate": (
+                sum(result.task_completed for result in evaluable_benign) / max(1, len(evaluable_benign))
+            ),
+            "termination_counts": dict(sorted(termination_counts.items())),
         })
 
     attacks = [scenario for scenario in scenarios if scenario.kind == "attack"]
@@ -245,6 +333,7 @@ def run_llm_evaluation(
         "any_token_usage_estimated": any(row["token_usage_estimated"] for row in metrics),
         "scenario_outcomes": outcomes,
         "failures": failures,
+        "termination_taxonomy": [reason.value for reason in TerminationReason],
     })
     paths = write_llm_outputs(payload, output_dir)
     return payload, paths

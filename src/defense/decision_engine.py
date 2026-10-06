@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from src.defense.authorization import AuthorizationResolver
 from src.defense.content_analyzer import ContentAnalyzer
 from src.defense.intent_analyzer import IntentAnalyzer
 from src.defense.policy_engine import PolicyEngine
@@ -13,6 +14,7 @@ class DecisionEngine:
         self.policy_engine = policy_engine or PolicyEngine()
         self.content = ContentAnalyzer()
         self.intent = IntentAnalyzer()
+        self.authorization = AuthorizationResolver()
 
     def build_context(self, scenario, call: ToolCall, history: list[ExecutionEvent]) -> SecurityContext:
         metadata = self.registry.metadata(call.tool_name)
@@ -29,9 +31,13 @@ class DecisionEngine:
             requested_permissions=metadata.required_permissions,
             security_policy=self.policy_engine.policy,
             resource_risk_level=metadata.risk_level,
+            user_authorizations=self.authorization.resolve(
+                scenario.user_request,
+                scenario.external_content,
+                self.registry.list_metadata(),
+            ),
         )
 
     def decide(self, scenario, call: ToolCall, history: list[ExecutionEvent]) -> SecurityDecision:
         context = self.build_context(scenario, call, history)
         return self.policy_engine.evaluate(context, call)
-

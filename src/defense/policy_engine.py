@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 
 from src.defense.history_analyzer import HistoryAnalyzer
+from src.defense.authorization import AuthorizationResolver
 from src.defense.intent_analyzer import IntentAnalyzer
 from src.defense.risk_engine import RiskEngine
 from src.defense.tool_call_analyzer import ToolCallAnalyzer
@@ -23,6 +24,7 @@ class PolicyFeatures:
     use_trust_boundary: bool = True
     use_sequence_risk: bool = True
     use_policy_engine: bool = True
+    use_scoped_authorization: bool = False
 
 
 class PolicyEngine:
@@ -35,6 +37,7 @@ class PolicyEngine:
         self.history = HistoryAnalyzer()
         self.tool_calls = ToolCallAnalyzer()
         self.risk = RiskEngine(self.policy)
+        self.authorization = AuthorizationResolver()
 
     def evaluate(self, context: SecurityContext, call: ToolCall) -> SecurityDecision:
         meta = context.proposed_tool
@@ -55,6 +58,12 @@ class PolicyEngine:
         exfiltration = self.tool_calls.data_exfiltration(call, meta, active_sequence_signals)
         privileged = self.tool_calls.privileged_change(call)
         untrusted_high = untrusted and suspicious and meta.risk_level in {RiskLevel.MEDIUM, RiskLevel.HIGH, RiskLevel.CRITICAL}
+        authorization = self.authorization.match(context.user_authorizations, call)
+        untrusted_authorization = self.authorization.match_untrusted(context.user_authorizations, call)
+        scoped = self.features.use_scoped_authorization and authorization.matched
+        untrusted_scope_expansion = (
+            self.features.use_scoped_authorization and untrusted_authorization.matched and not scoped
+        )
         score = self.risk.score(
             meta.risk_level,
             suspicious=suspicious,
@@ -69,16 +78,22 @@ class PolicyEngine:
         if exfiltration:
             rules.append("SECRET_TO_NETWORK_DENY")
             reasons.append("Secret access followed by network transmission is forbidden")
-        if meta.accesses_secret and not explicit:
+        if meta.accesses_secret and not explicit and not scoped:
             rules.append("SECRET_REQUIRES_EXPLICIT_INTENT")
             reasons.append("Secret access is not explicitly required by the user")
-        if untrusted_high:
+        if untrusted_high and not scoped:
             rules.extend(["UNTRUSTED_HIGH_RISK_DENY", "EXTERNAL_CANNOT_OVERRIDE_POLICY"])
             reasons.append("Untrusted content cannot authorize a medium/high-risk action")
-        if high_risk and mismatch:
+        if untrusted_high and scoped:
+            rules.append("SCOPED_USER_AUTHORIZATION")
+            reasons.append("Trusted user scope covers this exact Tool call; untrusted content did not expand the scope")
+        if untrusted_scope_expansion:
+            rules.append("UNTRUSTED_SCOPE_EXPANSION_DENY")
+            reasons.append("Untrusted content requested a Tool call outside trusted user/task authorization scope")
+        if high_risk and mismatch and not scoped:
             rules.append("HIGH_RISK_REQUIRES_INTENT")
             reasons.append("High-risk tool is unrelated to the original user intent")
-        if privileged:
+        if privileged and not scoped:
             rules.append("HIGH_RISK_REQUIRES_INTENT")
             reasons.append("Arguments request privileged infrastructure configuration")
         if meta.executes_command and call.arguments.get("command") not in self.policy["shell_allowlist"]:
@@ -88,6 +103,7 @@ class PolicyEngine:
         hard_deny = bool(set(rules) & {
             "SECRET_TO_NETWORK_DENY", "SECRET_REQUIRES_EXPLICIT_INTENT", "UNTRUSTED_HIGH_RISK_DENY",
             "HIGH_RISK_REQUIRES_INTENT", "SHELL_ALLOWLIST_ONLY",
+            "UNTRUSTED_SCOPE_EXPANSION_DENY",
         })
         if hard_deny:
             decision = Decision.BLOCK
@@ -95,9 +111,9 @@ class PolicyEngine:
             decision = Decision.REQUIRE_APPROVAL
             rules.append("DESTRUCTIVE_K8S_APPROVAL")
             reasons.append("Destructive Kubernetes action requires separate approval")
-        elif score >= self.policy["thresholds"]["block"] and mismatch:
+        elif score >= self.policy["thresholds"]["block"] and mismatch and not scoped:
             decision = Decision.BLOCK
-        elif score >= self.policy["thresholds"]["require_approval"] and high_risk and not explicit:
+        elif score >= self.policy["thresholds"]["require_approval"] and high_risk and not explicit and not scoped:
             decision = Decision.REQUIRE_APPROVAL
         else:
             decision = Decision.ALLOW
@@ -111,4 +127,6 @@ class PolicyEngine:
             intent_mismatch=mismatch,
             privilege_escalation=privilege_escalation or privileged,
             data_exfiltration_pattern=exfiltration,
+            authorization_scope_match=scoped,
+            authorization_source=authorization.source if scoped else None,
         )

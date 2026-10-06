@@ -8,7 +8,8 @@ def scenario(category: str):
 
 def test_ablation_matrix_has_requested_variants():
     assert set(ABLATIONS) == {
-        "context-aware-full", "without-execution-history", "without-intent-alignment",
+        "context-aware-full", "context-aware-scoped-authorization",
+        "without-execution-history", "without-intent-alignment",
         "without-trust-boundary", "without-sequence-risk", "without-policy-engine",
     }
 

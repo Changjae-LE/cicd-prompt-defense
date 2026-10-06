@@ -14,6 +14,8 @@ LLM_METRIC_FIELDS = [
     "high_risk_tool_invocation_rate", "tool_call_count", "average_tool_calls_per_task", "llm_call_count",
     "input_tokens", "output_tokens", "total_tokens", "token_usage_estimated", "average_latency_ms",
     "llm_latency_ms", "estimated_api_cost_usd",
+    "infrastructure_failure_count", "infrastructure_failure_rate", "security_block_count", "security_block_rate",
+    "evaluable_benign_completion_rate",
 ]
 
 
@@ -60,8 +62,8 @@ def _render_report(payload: dict[str, Any]) -> str:
         "",
         "## Aggregate results",
         "",
-        "| Agent | Mean ASR ± SD | TPR | FPR ± SD | FNR | Precision | Recall | F1 | Benign completion ± SD | Tool calls | LLM calls | Tokens | Cost USD |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Agent | Mean ASR ± SD | TPR | FPR ± SD | FNR | Precision | Recall | F1 | Benign completion ± SD | Infra failures | Security blocks | Tool calls | LLM calls | Tokens | Cost USD |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in payload["metrics"]:
         lines.append(
@@ -69,8 +71,12 @@ def _render_report(payload: dict[str, Any]) -> str:
             f"{_pct(row['mean_true_positive_rate'])} | {_pct(row['mean_false_positive_rate'])} ± {_pct(row['std_false_positive_rate'])} | "
             f"{_pct(row['mean_false_negative_rate'])} | {_pct(row['mean_precision'])} | {_pct(row['mean_recall'])} | "
             f"{_pct(row['mean_f1_score'])} | {_pct(row['mean_benign_completion_rate'])} ± {_pct(row['std_benign_completion_rate'])} | "
-            f"{row['tool_call_count']} | {row['llm_call_count']} | {row['total_tokens']} | {row['estimated_api_cost_usd']:.6f} |"
+            f"{row['infrastructure_failure_count']} | {row['security_block_count']} | {row['tool_call_count']} | "
+            f"{row['llm_call_count']} | {row['total_tokens']} | {row['estimated_api_cost_usd']:.6f} |"
         )
+    lines.extend(["", "## Termination taxonomy", ""])
+    for row in payload["metrics"]:
+        lines.append(f"- **{row['agent']}**: `{json.dumps(row['termination_counts'], sort_keys=True)}`")
     lines.extend([
         "",
         "## Failure cases",
@@ -89,6 +95,7 @@ def _render_report(payload: dict[str, Any]) -> str:
             f"- Security decisions: `{json.dumps(failure['security_decisions'], ensure_ascii=False)}`",
             f"- Final execution: `{json.dumps(failure['final_tool_execution'], ensure_ascii=False)}`",
             f"- Attack success: `{failure['attack_succeeded']}`; task completed: `{failure['task_completed']}`",
+            f"- Termination reason: `{failure['termination_reason']}`",
             f"- Provider error: `{failure['provider_error']}`",
             "",
         ])
@@ -103,4 +110,3 @@ def _render_report(payload: dict[str, Any]) -> str:
         "",
     ])
     return "\n".join(lines)
-

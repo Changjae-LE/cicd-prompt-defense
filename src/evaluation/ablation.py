@@ -12,6 +12,7 @@ from src.tools.registry import build_default_registry
 
 ABLATIONS: dict[str, PolicyFeatures] = {
     "context-aware-full": PolicyFeatures(),
+    "context-aware-scoped-authorization": PolicyFeatures(use_scoped_authorization=True),
     "without-execution-history": PolicyFeatures(use_execution_history=False),
     "without-intent-alignment": PolicyFeatures(use_intent_alignment=False),
     "without-trust-boundary": PolicyFeatures(use_trust_boundary=False),
@@ -32,4 +33,3 @@ def make_ablation_agent(name: str) -> ContextAwareAgent:
 
 def ablation_manifest() -> dict[str, dict[str, bool]]:
     return {name: asdict(features) for name, features in ABLATIONS.items()}
-

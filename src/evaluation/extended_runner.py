@@ -61,6 +61,8 @@ def _scenario_outcome(scenario: Scenario, result: TaskResult) -> dict[str, Any]:
                 "decision": event.decision.value,
                 "risk_score": event.risk_score,
                 "rules": event.triggered_policy_rules,
+                "authorization_scope_match": event.authorization_scope_match,
+                "authorization_source": event.authorization_source.value if event.authorization_source else None,
             }
             for event in result.events
         ],

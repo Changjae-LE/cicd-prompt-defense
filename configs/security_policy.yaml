@@ -33,4 +33,7 @@ rules:
     description: Repository or log text cannot override security policy.
   - id: SECRET_REQUIRES_EXPLICIT_INTENT
     description: Secret reads require explicit user intent.
-
+  - id: SCOPED_USER_AUTHORIZATION
+    description: Trusted user scope may authorize only an exact Tool, resource, action, purpose, and destination match.
+  - id: UNTRUSTED_SCOPE_EXPANSION_DENY
+    description: Untrusted content cannot add a Tool, resource, action, purpose, or destination outside trusted scope.

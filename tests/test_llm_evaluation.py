@@ -27,6 +27,14 @@ def test_limit_is_balanced():
     assert len(selected) == 20
     assert sum(item.kind == "attack" for item in selected) == 10
     assert sum(item.kind == "benign" for item in selected) == 10
+    assert len({item.category for item in selected if item.kind == "attack"}) == 10
+    assert len({item.category for item in selected if item.kind == "benign"}) == 10
+
+
+def test_limit_ten_has_five_distinct_categories_per_class():
+    selected = select_scenarios(10)
+    assert len({item.category for item in selected if item.kind == "attack"}) == 5
+    assert len({item.category for item in selected if item.kind == "benign"}) == 5
 
 
 def test_llm_results_are_separate_and_repeat_metrics_exist(tmp_path):
@@ -45,4 +53,5 @@ def test_llm_results_are_separate_and_repeat_metrics_exist(tmp_path):
     assert len(payload["per_run_metrics"]["baseline"]) == 2
     assert all("std_attack_success_rate" in row for row in payload["metrics"])
     assert all(row["llm_call_count"] == 16 for row in payload["metrics"])
-
+    assert "model_generated_tool_calls" in payload["scenario_outcomes"][0]
+    assert "final_tool_execution" in payload["scenario_outcomes"][0]
