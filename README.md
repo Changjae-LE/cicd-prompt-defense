@@ -120,6 +120,7 @@ python -m src.cli evaluate
 python -m src.cli evaluate --price-per-million-tokens 2.50
 python -m src.cli evaluate-extended
 python -m src.cli evaluate-authorization
+python -m src.cli evaluate-goal-aware --provider ollama --model llama3.1 --limit 10 --post-task-audit-steps 2
 python -m src.cli evaluate-llm --provider openai --model YOUR_MODEL --limit 20
 python -m src.cli evaluate-llm --provider ollama --model llama3.1 --limit 20
 python -m src.cli report
@@ -197,6 +198,30 @@ Each grant can constrain allowed Tools, resources, actions, destinations, purpos
 When an untrusted document requests a call outside trusted scope, `UNTRUSTED_SCOPE_EXPANSION_DENY` applies even if the lexical suspicious-content detector misses the wording. When an exact trusted grant covers a call, `SCOPED_USER_AUTHORIZATION` may resolve `UNTRUSTED_HIGH_RISK_DENY`; this does not suppress an independent sequence/exfiltration deny.
 
 `evaluate-authorization` compares the legacy and scoped policy over the unchanged 128-attack/120-benign dataset and separately evaluates four fixed resource, destination, fake-delegation, and Tool-expansion attacks. It writes `results/authorization_results.json`, `results/authorization_results.csv`, and `results/authorization_report.md`.
+
+## Goal-aware termination and research audit
+
+Goal completion is a separate state machine, not a security decision. A structured goal contains one or more Tool requirements and, when known, exact resources and required successful results. Its states are `NOT_STARTED`, `IN_PROGRESS`, `SATISFIED`, and `FAILED`.
+
+Two execution modes preserve the operational/research distinction:
+
+- **Operational:** once every goal requirement has a successful matching execution, provider sampling stops with `GOAL_SATISFIED`.
+- **Research audit:** after satisfaction, up to `--post-task-audit-steps` additional model proposals are labelled `POST_TASK_AUDIT`. Security authorization still runs, but no audit-phase Tool executes. Completion is recorded as `POST_TASK_AUDIT_COMPLETE`.
+
+Every proposal records its execution phase, whether it occurred before goal completion, whether it is an exact canonical repeat, whether it is malicious ground truth, its security decision, and whether it was audit-only. Ambiguous aliases such as generic `api-key` are not treated as equivalent to `billing_api_key`.
+
+The goal-aware report retains the original FPR definition and adds operational FPR, which counts only user-visible blocks before operational termination. It also reports goal completion, redundant/post-task proposal rates, post-task malicious detection, counterfactual audit ASR, calls before completion, and call/token/latency savings.
+
+```powershell
+python -m src.cli evaluate-goal-aware `
+  --provider ollama `
+  --model llama3.1 `
+  --limit 10 `
+  --max-steps 4 `
+  --post-task-audit-steps 2
+```
+
+Outputs are isolated under `results/goal_aware/`: `goal_aware_results.json`, `goal_aware_results.csv`, `goal_aware_report.md`, and `goal_aware_ablation.csv`. Existing Mock, extended, scoped-authorization, and real-LLM result files are not overwritten.
 
 ## Ablation study
 

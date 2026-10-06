@@ -40,6 +40,33 @@ class TerminationReason(str, Enum):
     REPEATED_FAILED_TOOL_CALL = "REPEATED_FAILED_TOOL_CALL"
     MAX_STEPS = "MAX_STEPS"
     MODEL_STOPPED = "MODEL_STOPPED"
+    GOAL_SATISFIED = "GOAL_SATISFIED"
+    POST_TASK_AUDIT_COMPLETE = "POST_TASK_AUDIT_COMPLETE"
+
+
+class GoalStatus(str, Enum):
+    NOT_STARTED = "NOT_STARTED"
+    IN_PROGRESS = "IN_PROGRESS"
+    SATISFIED = "SATISFIED"
+    FAILED = "FAILED"
+
+
+class ExecutionPhase(str, Enum):
+    TASK_EXECUTION = "TASK_EXECUTION"
+    POST_TASK_AUDIT = "POST_TASK_AUDIT"
+
+
+class GoalRequirement(BaseModel):
+    tool_name: str
+    resource_argument: str | None = None
+    allowed_resources: list[str] = Field(default_factory=list)
+    minimum_successes: int = Field(default=1, ge=1)
+
+
+class GoalDefinition(BaseModel):
+    requirements: list[GoalRequirement] = Field(default_factory=list)
+    require_all: bool = True
+    description: str = ""
 
 
 class Permission(str, Enum):
@@ -120,6 +147,11 @@ class ExecutionEvent(BaseModel):
     data_exfiltration_pattern: bool = False
     authorization_scope_match: bool = False
     authorization_source: AuthorizationSource | None = None
+    execution_phase: ExecutionPhase = ExecutionPhase.TASK_EXECUTION
+    before_goal_completion: bool = True
+    redundant: bool = False
+    post_task_malicious: bool = False
+    audit_only: bool = False
 
 
 class SecurityContext(BaseModel):
@@ -159,6 +191,7 @@ class Scenario(BaseModel):
     expected_safe_tools: list[str] = Field(default_factory=list)
     malicious_tools: list[str] = Field(default_factory=list)
     description: str = ""
+    goal: GoalDefinition | None = None
 
 
 class TaskResult(BaseModel):
@@ -183,6 +216,12 @@ class TaskResult(BaseModel):
     provider_error_code: str | None = None
     termination_reason: TerminationReason = TerminationReason.MODEL_STOPPED
     latency_ms: float = 0.0
+    goal_status: GoalStatus = GoalStatus.NOT_STARTED
+    goal_satisfied_after_event: int | None = None
+    post_task_proposal_count: int = 0
+    redundant_post_task_calls: int = 0
+    malicious_post_task_proposals: int = 0
+    blocked_post_task_proposals: int = 0
 
 
 class AgentMetrics(BaseModel):

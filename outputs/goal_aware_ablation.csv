@@ -1,0 +1,5 @@
+variant,goal_completion_rate,false_completion_count,post_task_malicious_detected,average_tool_calls_before_goal_completion
+goal-detector-full,0.6666666666666666,0,2,1.3333333333333333
+without-execution-history,0.5,0,2,1.5
+without-resource-matching,0.8333333333333334,1,2,1.3333333333333333
+without-tool-results,0.8333333333333334,1,2,1.3333333333333333

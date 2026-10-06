@@ -13,6 +13,7 @@ from src.evaluation.reports import write_reports
 from src.evaluation.runner import EvaluationRunner
 from src.evaluation.extended_runner import run_extended_evaluation
 from src.evaluation.authorization_runner import run_authorization_evaluation
+from src.evaluation.goal_aware_runner import run_goal_aware_evaluation
 from src.evaluation.llm_runner import build_provider, run_llm_evaluation, select_scenarios
 from src.models.schemas import AgentMetrics, TaskResult
 from src.providers.base import ProviderError
@@ -131,6 +132,54 @@ def command_evaluate_authorization() -> None:
     print(f"Report: {paths['report']}")
 
 
+def command_evaluate_goal_aware(
+    provider_name: str,
+    model: str | None,
+    *,
+    limit: int,
+    temperature: float,
+    max_steps: int,
+    post_task_audit_steps: int,
+    timeout: float,
+) -> None:
+    probe = build_provider(
+        provider_name,
+        model,
+        temperature=temperature,
+        max_steps=max_steps,
+        timeout=timeout,
+        input_price_per_million=0.0,
+        output_price_per_million=0.0,
+    )
+    try:
+        probe.ensure_available()
+    except ProviderError as exc:
+        print(f"{provider_name} goal-aware evaluation skipped: {exc}")
+        return
+    resolved_model = getattr(probe, "model", model or "")
+    payload, paths = run_goal_aware_evaluation(
+        provider_name=provider_name,
+        model=resolved_model,
+        output_dir=RESULTS_DIR / "goal_aware",
+        limit=limit,
+        temperature=temperature,
+        max_steps=max_steps,
+        post_task_audit_steps=post_task_audit_steps,
+        timeout=timeout,
+    )
+    print(f"Goal-aware evaluation complete: provider={provider_name}, model={resolved_model}.")
+    for row in payload["real_llm"]["metrics"]:
+        print(
+            f"  {row['mode']}: ASR={row['attack_success_rate']:.1%}, "
+            f"counterfactual ASR={row['audit_counterfactual_asr']:.1%}, "
+            f"existing FPR={row['existing_false_positive_rate']:.1%}, "
+            f"operational FPR={row['goal_aware_operational_fpr']:.1%}, "
+            f"calls={row['tool_call_count']}, tokens={row['total_tokens']}"
+        )
+    for label, path in paths.items():
+        print(f"{label}: {path}")
+
+
 def command_evaluate_llm(
     provider_name: str,
     model: str | None,
@@ -201,6 +250,14 @@ def build_parser() -> argparse.ArgumentParser:
     extended = sub.add_parser("evaluate-extended", help="Run the extended fairness and ablation evaluation")
     extended.add_argument("--write-traces", action="store_true", help="Write per-task redacted traces")
     sub.add_parser("evaluate-authorization", help="Compare legacy and scoped Context-Aware authorization")
+    goal = sub.add_parser("evaluate-goal-aware", help="Compare current, operational, and post-task-audit execution")
+    goal.add_argument("--provider", choices=["openai", "ollama"], required=True)
+    goal.add_argument("--model", help="Model name; falls back to provider environment configuration")
+    goal.add_argument("--limit", type=int, default=10)
+    goal.add_argument("--temperature", type=float, default=0.0)
+    goal.add_argument("--max-steps", type=int, default=4)
+    goal.add_argument("--post-task-audit-steps", type=int, default=2)
+    goal.add_argument("--timeout", type=float, default=120.0)
     llm = sub.add_parser("evaluate-llm", help="Evaluate real OpenAI or Ollama model-generated tool calls")
     llm.add_argument("--provider", choices=["openai", "ollama"], required=True)
     llm.add_argument("--model", help="Model name; falls back to OPENAI_MODEL or OLLAMA_MODEL")
@@ -228,6 +285,16 @@ def main(argv: list[str] | None = None) -> None:
         command_evaluate_extended(args.write_traces)
     elif args.command == "evaluate-authorization":
         command_evaluate_authorization()
+    elif args.command == "evaluate-goal-aware":
+        command_evaluate_goal_aware(
+            args.provider,
+            args.model,
+            limit=args.limit,
+            temperature=args.temperature,
+            max_steps=args.max_steps,
+            post_task_audit_steps=args.post_task_audit_steps,
+            timeout=args.timeout,
+        )
     elif args.command == "evaluate-llm":
         command_evaluate_llm(
             args.provider,
