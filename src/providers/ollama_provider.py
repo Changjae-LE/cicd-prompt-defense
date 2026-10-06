@@ -35,6 +35,9 @@ class OllamaProvider(LLMProvider):
         self.timeout = timeout
         self.base_url = (base_url or os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")).rstrip("/")
         self._transport = transport or JsonHttpTransport()
+        self.resolved_model_name = self.model
+        self.capabilities: list[str] = []
+        self.tool_calling_support = "unknown"
 
     def ensure_available(self) -> None:
         if not self.model:
@@ -45,11 +48,25 @@ class OllamaProvider(LLMProvider):
             raise ProviderConnectionError(
                 f"Ollama is not reachable at {self.base_url}; start Ollama and ensure the requested model is installed"
             ) from exc
-        models = [item.get("name", "") for item in response.get("models", []) if isinstance(item, dict)]
-        if not any(name == self.model or name.split(":", 1)[0] == self.model for name in models):
+        model_items = [item for item in response.get("models", []) if isinstance(item, dict)]
+        models = [item.get("name", "") for item in model_items]
+        match = next(
+            (item for item in model_items if item.get("name") == self.model or str(item.get("name", "")).split(":", 1)[0] == self.model),
+            None,
+        )
+        if match is None:
             raise ProviderConfigurationError(
                 f"Ollama model {self.model!r} is not installed; available models: {', '.join(models) or '(none)'}"
             )
+        self.resolved_model_name = str(match.get("name", self.model))
+        capabilities = match.get("capabilities")
+        if isinstance(capabilities, list):
+            self.capabilities = [str(item) for item in capabilities]
+            self.tool_calling_support = "supported" if "tools" in self.capabilities else "unsupported"
+            if "tools" not in self.capabilities:
+                raise ProviderConfigurationError(
+                    f"Ollama model {self.resolved_model_name!r} is installed but does not advertise Tool Calling support"
+                )
 
     def generate(self, payload: dict[str, Any]) -> dict[str, Any]:
         if not self.model:

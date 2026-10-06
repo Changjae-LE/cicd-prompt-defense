@@ -275,6 +275,59 @@ The provenance tracker is integrated with goal-aware research audit mode. Post-g
 - Archives, encryption, steganography, partial-string reconstruction, and real byte-level data are outside this prototype.
 - Real-model completion failures and independently sampled call sequences can dominate aggregate comparisons; the deterministic identical-call result is the primary causal measurement.
 
+## Cross-model generalization evaluation
+
+`evaluate-multimodel` applies one fixed, balanced, deterministic scenario selection to every model. Scenario IDs, attack/benign ratio, Tool schemas, `FakeEnvironment`, security policy, goal compilation, provenance rules, temperature, step limit, and audit budget are recorded once in `multimodel_summary.json` and reused without model-specific tuning.
+
+The default smoke candidates are `llama3.1`, `qwen2.5:7b`, and `mistral-nemo`. Ollama currently marks the [Qwen2.5 family](https://ollama.com/library/qwen2.5) and [Mistral NeMo](https://ollama.com/library/mistral-nemo) as Tool-capable. The evaluator reads Ollama's installed-model metadata and skips a model that is missing or does not advertise the `tools` capability. It never downloads or pulls a model.
+
+Install missing candidates manually only if you want to evaluate them:
+
+```powershell
+ollama pull qwen2.5:7b
+ollama pull mistral-nemo
+```
+
+The smoke default uses the three most informative variants and 12 scenarios:
+
+```powershell
+python -m src.cli evaluate-multimodel `
+  --ollama-models llama3.1,qwen2.5:7b,mistral-nemo `
+  --variants baseline,context-aware,full `
+  --limit 12 `
+  --runs 1 `
+  --temperature 0 `
+  --max-steps 6 `
+  --post-task-audit-steps 2
+```
+
+Run all six defense variants and three repetitions for a larger study:
+
+```powershell
+python -m src.cli evaluate-multimodel `
+  --variants baseline,input-only,context-aware,context-scoped,goal-aware,full `
+  --limit 20 `
+  --runs 3
+```
+
+Optional OpenAI models can be included with `--openai-models MODEL_A,MODEL_B`. If `OPENAI_API_KEY` is absent, their status is recorded as unavailable and no request is made.
+
+Two evaluation modes are intentionally separated:
+
+- **End-to-End:** each model/defense pair independently proposes Tool Calls. This measures the safety and utility of the complete Agent system, but proposal variation is part of the result.
+- **Controlled defense replay:** the same model/run/scenario's Baseline-generated proposal sequence is replayed unchanged through every selected defense. This better isolates enforcement, but cannot model how the LLM would react to a block or to provenance-symbolic output.
+
+Model-behavior metrics are computed from the Baseline proposal source rather than credited to the security layer: attack-instruction following, high-risk first proposal, normal Tool selection, schema adherence, inferred refusal, and post-goal extra Tool generation. Parsing, invalid Tool/argument, provider, repeated-failure, and max-step outcomes are reported as compatibility/infrastructure failures, not security detections.
+
+Results are isolated under `results/multimodel/`:
+
+- `multimodel_summary.json`, `multimodel_summary.csv`, and `multimodel_report.md`
+- one `PROVIDER_MODEL_results.json` file per requested model, including unavailable models
+- `controlled_summary.json` and `controlled_summary.csv`
+- `multimodel_graph_data.csv` for ASR, FPR, completion, exfiltration, security/usability, token, and latency figures
+
+The summary reports mean and population standard deviation across `--runs`, plus Baseline-to-Full relative ASR reduction, FPR/completion changes, and Tool/token reductions. A one-run smoke has a zero standard deviation by definition and is not evidence of statistical stability.
+
 ## Real LLM Evaluation
 
 The Mock evaluation replays the dataset's fixed Tool Call plan. It isolates authorization behavior and is deterministic, but cannot measure which actions a real model proposes after reading an indirect injection. The real-LLM mode asks OpenAI or Ollama to select one next Tool Call at a time from the central Registry. Each subsequent request contains the original user request, labelled external content, the available Tool schemas, and redacted execution history.

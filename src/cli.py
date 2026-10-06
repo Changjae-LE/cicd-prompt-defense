@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from src.agent.baseline_agent import BaselineAgent
@@ -15,6 +16,12 @@ from src.evaluation.extended_runner import run_extended_evaluation
 from src.evaluation.authorization_runner import run_authorization_evaluation
 from src.evaluation.goal_aware_runner import run_goal_aware_evaluation
 from src.evaluation.provenance_runner import run_provenance_evaluation
+from src.evaluation.multimodel_runner import (
+    CORE_VARIANTS,
+    ModelSpec,
+    parse_variants,
+    run_multimodel_evaluation,
+)
 from src.evaluation.llm_runner import build_provider, run_llm_evaluation, select_scenarios
 from src.models.schemas import AgentMetrics, TaskResult
 from src.providers.base import ProviderError
@@ -291,6 +298,65 @@ def command_evaluate_llm(
     print(f"Report: {paths['report']}")
 
 
+def command_evaluate_multimodel(
+    *,
+    ollama_models: str,
+    openai_models: str,
+    variants: str,
+    limit: int,
+    runs: int,
+    temperature: float,
+    max_steps: int,
+    post_task_audit_steps: int,
+    timeout: float,
+) -> None:
+    selected_variants = parse_variants(variants)
+    specs = [
+        ModelSpec("ollama", model.strip())
+        for model in ollama_models.split(",") if model.strip()
+    ]
+    requested_openai = [model.strip() for model in openai_models.split(",") if model.strip()]
+    if not requested_openai and os.environ.get("OPENAI_MODEL"):
+        requested_openai = [os.environ["OPENAI_MODEL"]]
+    specs.extend(ModelSpec("openai", model) for model in requested_openai)
+    if not specs:
+        raise SystemExit("Specify at least one model with --ollama-models or --openai-models")
+    calls_per_scenario = sum(
+        max_steps + (post_task_audit_steps if variant in {"goal-aware", "full"} else 0)
+        for variant in selected_variants
+    )
+    maximum_calls = len(specs) * limit * runs * calls_per_scenario
+    print(
+        f"Starting multi-model smoke: models={len(specs)}, scenarios={limit}, runs={runs}, "
+        f"variants={','.join(selected_variants)}, upper-bound model calls={maximum_calls}."
+    )
+    payload, paths = run_multimodel_evaluation(
+        specs=specs,
+        output_dir=RESULTS_DIR / "multimodel",
+        variants=selected_variants,
+        limit=limit,
+        runs=runs,
+        temperature=temperature,
+        max_steps=max_steps,
+        post_task_audit_steps=post_task_audit_steps,
+        timeout=timeout,
+    )
+    for status in payload["model_status"]:
+        print(f"  {status['provider']}:{status['model']}: {status['status']}")
+        if status["status"] != "available":
+            print(f"    {status.get('reason', 'unavailable')}")
+    for row in payload["metrics"]:
+        if row["evaluation_mode"] == "end_to_end":
+            print(
+                f"  {row['model']} / {row['defense']}: "
+                f"ASR={row['attack_success_rate_mean']:.1%}, "
+                f"FPR={row['false_positive_rate_mean']:.1%}, "
+                f"completion={row['benign_completion_rate_mean']:.1%}"
+            )
+    for label, path in paths.items():
+        print(f"{label}: {path}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="agentguard", description="Context-aware defense research prototype")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -329,6 +395,28 @@ def build_parser() -> argparse.ArgumentParser:
     llm.add_argument("--timeout", type=float, default=60.0)
     llm.add_argument("--input-price-per-million", type=float, default=0.0, help="Optional current input-token price")
     llm.add_argument("--output-price-per-million", type=float, default=0.0, help="Optional current output-token price")
+    multimodel = sub.add_parser("evaluate-multimodel", help="Evaluate defense generalization across local and optional OpenAI models")
+    multimodel.add_argument(
+        "--ollama-models",
+        default="llama3.1,qwen2.5:7b,mistral-nemo",
+        help="Comma-separated installed Ollama models; missing models are reported and never pulled",
+    )
+    multimodel.add_argument(
+        "--openai-models",
+        default="",
+        help="Optional comma-separated OpenAI models; OPENAI_MODEL is used when this is omitted",
+    )
+    multimodel.add_argument(
+        "--variants",
+        default=",".join(CORE_VARIANTS),
+        help="Comma-separated defense variants; use all six for the final evaluation",
+    )
+    multimodel.add_argument("--limit", type=int, default=12, help="Balanced deterministic scenario count")
+    multimodel.add_argument("--runs", type=int, default=1)
+    multimodel.add_argument("--temperature", type=float, default=0.0)
+    multimodel.add_argument("--max-steps", type=int, default=6)
+    multimodel.add_argument("--post-task-audit-steps", type=int, default=2)
+    multimodel.add_argument("--timeout", type=float, default=120.0)
     return parser
 
 
@@ -376,6 +464,18 @@ def main(argv: list[str] | None = None) -> None:
             timeout=args.timeout,
             input_price_per_million=args.input_price_per_million,
             output_price_per_million=args.output_price_per_million,
+        )
+    elif args.command == "evaluate-multimodel":
+        command_evaluate_multimodel(
+            ollama_models=args.ollama_models,
+            openai_models=args.openai_models,
+            variants=args.variants,
+            limit=args.limit,
+            runs=args.runs,
+            temperature=args.temperature,
+            max_steps=args.max_steps,
+            post_task_audit_steps=args.post_task_audit_steps,
+            timeout=args.timeout,
         )
 
 

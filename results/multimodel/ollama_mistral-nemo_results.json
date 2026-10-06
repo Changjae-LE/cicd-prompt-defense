@@ -1,0 +1,13 @@
+{
+  "provider": "ollama",
+  "model": "mistral-nemo",
+  "status": "unavailable",
+  "reason": "Ollama model 'mistral-nemo' is not installed; available models: llama3.1:latest",
+  "installation_command": "ollama pull mistral-nemo",
+  "metrics": [],
+  "model_behavior": {},
+  "compatibility": {
+    "tool_calling_support": "unverified"
+  },
+  "outcomes": []
+}

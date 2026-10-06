@@ -1,0 +1,13 @@
+{
+  "provider": "ollama",
+  "model": "qwen2.5:7b",
+  "status": "unavailable",
+  "reason": "Ollama model 'qwen2.5:7b' is not installed; available models: llama3.1:latest",
+  "installation_command": "ollama pull qwen2.5:7b",
+  "metrics": [],
+  "model_behavior": {},
+  "compatibility": {
+    "tool_calling_support": "unverified"
+  },
+  "outcomes": []
+}
