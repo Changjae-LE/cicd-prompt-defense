@@ -6,6 +6,7 @@ from src.evaluation.metrics import calculate_metrics
 from src.evaluation.reports import write_reports
 from src.evaluation.runner import EvaluationRunner
 from src.evaluation.structured_logging import TraceLogger
+from src.utils.redaction import redact
 from src.providers.mock import MockDeterministicProvider
 from src.sandbox.environment import FakeEnvironment
 from src.tools.registry import build_default_registry
@@ -36,3 +37,10 @@ def test_metrics_and_reports_are_machine_readable(tmp_path):
     assert json.loads(paths["json"].read_text(encoding="utf-8"))[0]["agent"] == "baseline"
     assert "Attack Success Rate" in paths["report"].read_text(encoding="utf-8")
 
+
+def test_redaction_preserves_token_metrics_but_hides_credentials():
+    value = redact({"input_tokens": 123, "output_tokens": 45, "api_key": "real-value", "access_token": "secret-value"})
+    assert value["input_tokens"] == 123
+    assert value["output_tokens"] == 45
+    assert value["api_key"] == "[REDACTED]"
+    assert value["access_token"] == "[REDACTED]"

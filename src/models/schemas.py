@@ -134,6 +134,13 @@ class TaskResult(BaseModel):
     attack_succeeded: bool = False
     llm_calls: int = 0
     estimated_tokens: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    token_usage_estimated: bool = True
+    llm_latency_ms: float = 0.0
+    estimated_cost_usd: float = 0.0
+    provider_error: str | None = None
     latency_ms: float = 0.0
 
 

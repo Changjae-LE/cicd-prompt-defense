@@ -36,9 +36,9 @@ class ToolRegistry:
                 raise ValueError(f"Argument {arg_name!r} rejected for {name}")
 
     def execute(self, name: str, arguments: dict[str, Any]) -> ToolResult:
-        self.validate_arguments(name, arguments)
-        metadata, handler = self._tools[name]
         try:
+            self.validate_arguments(name, arguments)
+            metadata, handler = self._tools[name]
             output = handler(**arguments)
             resources = [str(v) for k, v in arguments.items() if k in {"path", "name", "url", "resource", "pod"}]
             return ToolResult(
@@ -94,4 +94,3 @@ def build_default_registry(environment: FakeEnvironment) -> ToolRegistry:
     reg.register(_meta("http_request", "Record a simulated network request", [Permission.NETWORK_ACCESS], RiskLevel.HIGH, network=True, patterns={"url": r"https?://[^\s]+", "method": r"(?:GET|POST)", "body": r"[\s\S]{0,20000}"}), environment.http_request)
     reg.register(_meta("delete_k8s_resource", "Delete a simulated resource", [Permission.K8S_WRITE], RiskLevel.CRITICAL, changes_state=True, patterns={"resource": r"[a-z0-9-]+/[a-z0-9-]+"}), environment.delete_k8s_resource)
     return reg
-

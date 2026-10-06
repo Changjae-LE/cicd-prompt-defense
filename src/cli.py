@@ -12,7 +12,9 @@ from src.evaluation.metrics import calculate_metrics
 from src.evaluation.reports import write_reports
 from src.evaluation.runner import EvaluationRunner
 from src.evaluation.extended_runner import run_extended_evaluation
+from src.evaluation.llm_runner import build_provider, run_llm_evaluation, select_scenarios
 from src.models.schemas import AgentMetrics, TaskResult
+from src.providers.base import ProviderError
 from src.providers.mock import MockDeterministicProvider
 from src.sandbox.environment import FakeEnvironment
 from src.tools.registry import build_default_registry
@@ -113,6 +115,63 @@ def command_evaluate_extended(write_traces: bool = False) -> None:
     print(f"Report: {paths['report']}")
 
 
+def command_evaluate_llm(
+    provider_name: str,
+    model: str | None,
+    *,
+    limit: int | None,
+    runs: int,
+    temperature: float,
+    max_steps: int,
+    timeout: float,
+    input_price_per_million: float,
+    output_price_per_million: float,
+) -> None:
+    probe = build_provider(
+        provider_name,
+        model,
+        temperature=temperature,
+        max_steps=max_steps,
+        timeout=timeout,
+        input_price_per_million=input_price_per_million,
+        output_price_per_million=output_price_per_million,
+    )
+    try:
+        probe.ensure_available()
+    except ProviderError as exc:
+        print(f"{provider_name} evaluation skipped: {exc}")
+        return
+    resolved_model = getattr(probe, "model", model or "")
+    selected = select_scenarios(limit)
+    maximum_calls = len(selected) * 3 * runs * max_steps
+    print(
+        f"Starting real-LLM evaluation: provider={provider_name}, model={resolved_model}, "
+        f"scenarios={len(selected)}, runs={runs}, maximum API/model calls={maximum_calls}."
+    )
+    payload, paths = run_llm_evaluation(
+        provider_name=provider_name,
+        model=resolved_model,
+        output_dir=RESULTS_DIR / "llm",
+        limit=limit,
+        runs=runs,
+        temperature=temperature,
+        max_steps=max_steps,
+        timeout=timeout,
+        input_price_per_million=input_price_per_million,
+        output_price_per_million=output_price_per_million,
+    )
+    for row in payload["metrics"]:
+        print(
+            f"  {row['agent']}: mean ASR={row['mean_attack_success_rate']:.1%}, "
+            f"mean FPR={row['mean_false_positive_rate']:.1%}, "
+            f"mean benign completion={row['mean_benign_completion_rate']:.1%}, "
+            f"tokens={row['total_tokens']}, cost=${row['estimated_api_cost_usd']:.6f}"
+        )
+    print(f"JSON: {paths['json']}")
+    print(f"CSV: {paths['csv']}")
+    print(f"Report: {paths['report']}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="agentguard", description="Context-aware defense research prototype")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -125,6 +184,16 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("report", help="Regenerate the Markdown/CSV report from JSON")
     extended = sub.add_parser("evaluate-extended", help="Run the extended fairness and ablation evaluation")
     extended.add_argument("--write-traces", action="store_true", help="Write per-task redacted traces")
+    llm = sub.add_parser("evaluate-llm", help="Evaluate real OpenAI or Ollama model-generated tool calls")
+    llm.add_argument("--provider", choices=["openai", "ollama"], required=True)
+    llm.add_argument("--model", help="Model name; falls back to OPENAI_MODEL or OLLAMA_MODEL")
+    llm.add_argument("--limit", type=int, help="Balanced limit across attack and benign scenarios")
+    llm.add_argument("--runs", type=int, default=1, help="Repeated runs per scenario")
+    llm.add_argument("--temperature", type=float, default=0.0)
+    llm.add_argument("--max-steps", type=int, default=4, help="Maximum model-proposed tool calls per task")
+    llm.add_argument("--timeout", type=float, default=60.0)
+    llm.add_argument("--input-price-per-million", type=float, default=0.0, help="Optional current input-token price")
+    llm.add_argument("--output-price-per-million", type=float, default=0.0, help="Optional current output-token price")
     return parser
 
 
@@ -140,6 +209,18 @@ def main(argv: list[str] | None = None) -> None:
         command_report()
     elif args.command == "evaluate-extended":
         command_evaluate_extended(args.write_traces)
+    elif args.command == "evaluate-llm":
+        command_evaluate_llm(
+            args.provider,
+            args.model,
+            limit=args.limit,
+            runs=args.runs,
+            temperature=args.temperature,
+            max_steps=args.max_steps,
+            timeout=args.timeout,
+            input_price_per_million=args.input_price_per_million,
+            output_price_per_million=args.output_price_per_million,
+        )
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ from src.evaluation.extended_dataset import DATASET_VERSION, extended_dataset_fi
 from src.evaluation.extended_reports import write_extended_outputs
 from src.evaluation.metrics import calculate_metrics
 from src.evaluation.runner import EvaluationRunner
-from src.evaluation.structured_logging import redact
+from src.utils.redaction import redact
 from src.models.schemas import AgentMetrics, Decision, Scenario, TaskResult
 from src.providers.mock import MockDeterministicProvider
 from src.sandbox.environment import FakeEnvironment

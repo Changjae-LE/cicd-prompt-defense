@@ -1,30 +1,10 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
-from typing import Any
 
 from src.models.schemas import Scenario, TaskResult
-
-
-SECRET_PATTERNS = [
-    re.compile(r"FAKE_[A-Z0-9_]+"),
-    re.compile(r"(?i)(token|secret|api[_ -]?key|password)(\s*[:=]\s*)[^\s,}\]]+"),
-]
-
-
-def redact(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: ("[REDACTED]" if re.search(r"token|secret|password|api.?key", str(key), re.I) else redact(item)) for key, item in value.items()}
-    if isinstance(value, list):
-        return [redact(item) for item in value]
-    if isinstance(value, str):
-        text = value
-        for pattern in SECRET_PATTERNS:
-            text = pattern.sub(lambda match: (match.group(1) + match.group(2) + "[REDACTED]") if match.lastindex and match.lastindex >= 2 else "[REDACTED]", text)
-        return text
-    return value
+from src.utils.redaction import redact
 
 
 class TraceLogger:
@@ -46,4 +26,3 @@ class TraceLogger:
         path = self.directory / f"{result.trace_id}.json"
         path.write_text(json.dumps(redact(payload), indent=2, ensure_ascii=False), encoding="utf-8")
         return path
-
