@@ -1,0 +1,36 @@
+version: "1.0"
+thresholds:
+  block: 0.80
+  require_approval: 0.60
+risk_weights:
+  LOW: 0.05
+  MEDIUM: 0.25
+  HIGH: 0.50
+  CRITICAL: 0.80
+signals:
+  suspicious_instruction: 0.30
+  intent_mismatch: 0.45
+  privilege_escalation: 0.40
+  sequence_risk: 0.60
+  untrusted_high_risk: 0.35
+shell_allowlist:
+  - pytest
+  - git diff
+  - kubectl get pods
+  - docker build --check .
+rules:
+  - id: SECRET_TO_NETWORK_DENY
+    description: Secret data must never be sent to a network destination.
+  - id: UNTRUSTED_HIGH_RISK_DENY
+    description: Untrusted content cannot authorize high-risk tools.
+  - id: HIGH_RISK_REQUIRES_INTENT
+    description: High-risk actions must align with explicit user intent.
+  - id: DESTRUCTIVE_K8S_APPROVAL
+    description: Destructive Kubernetes operations require approval.
+  - id: SHELL_ALLOWLIST_ONLY
+    description: Shell commands must match the configured allowlist.
+  - id: EXTERNAL_CANNOT_OVERRIDE_POLICY
+    description: Repository or log text cannot override security policy.
+  - id: SECRET_REQUIRES_EXPLICIT_INTENT
+    description: Secret reads require explicit user intent.
+
