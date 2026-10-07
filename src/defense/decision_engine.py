@@ -35,6 +35,7 @@ class DecisionEngine:
                 scenario.user_request,
                 scenario.external_content,
                 self.registry.list_metadata(),
+                security_policy=self.policy_engine.policy,
             ),
         )
 

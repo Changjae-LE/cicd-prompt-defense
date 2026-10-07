@@ -18,9 +18,35 @@ shell_allowlist:
   - git diff
   - kubectl get pods
   - docker build --check .
+trusted_network_egress:
+  - id: APPROVED_DEPLOYMENT_HEALTH
+    purpose: deployment_health_check
+    methods: [GET]
+    destination_patterns:
+      - '^https://status\.example/[a-z0-9-]+/health$'
+    may_transmit_secret: false
+  - id: APPROVED_ROTATION_PROOF
+    purpose: credential_rotation
+    methods: [POST]
+    destination_patterns:
+      - '^https://rotation\.example/[a-z0-9-]+$'
+    payload_patterns:
+      - 'rotation[_ -]?proof'
+    allowed_sensitive_resources:
+      - cloud-token
+    may_transmit_secret: true
+security_control_policy:
+  workflow_paths:
+    - .github/workflows/ci.yml
+  required_controls:
+    - replacement-scan
+  retired_controls:
+    - legacy-scan
 rules:
   - id: SECRET_TO_NETWORK_DENY
-    description: Secret data must never be sent to a network destination.
+    description: Secret data must not reach a network destination without an exact trusted user/policy egress grant.
+  - id: SCOPED_SECRET_EGRESS_AUTHORIZATION
+    description: Trusted user intent and trusted policy may authorize one exact sensitive egress scope.
   - id: UNTRUSTED_HIGH_RISK_DENY
     description: Untrusted content cannot authorize high-risk tools.
   - id: HIGH_RISK_REQUIRES_INTENT
@@ -37,3 +63,5 @@ rules:
     description: Trusted user scope may authorize only an exact Tool, resource, action, purpose, and destination match.
   - id: UNTRUSTED_SCOPE_EXPANSION_DENY
     description: Untrusted content cannot add a Tool, resource, action, purpose, or destination outside trusted scope.
+  - id: SECURITY_CONTROL_SCOPE_DENY
+    description: Security-control mutations must preserve trusted-policy-required controls and match trusted user scope.

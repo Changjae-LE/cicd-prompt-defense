@@ -269,9 +269,14 @@ class ProvenanceTracker:
 class ProvenancePolicy:
     SENSITIVE = {Sensitivity.SENSITIVE, Sensitivity.SECRET, Sensitivity.SECRET_DERIVED}
 
-    def __init__(self, features: ProvenanceFeatures | None = None) -> None:
+    def __init__(
+        self,
+        features: ProvenanceFeatures | None = None,
+        security_policy: dict[str, Any] | None = None,
+    ) -> None:
         self.features = features or ProvenanceFeatures()
         self.authorization = AuthorizationResolver()
+        self.security_policy = security_policy or {}
 
     def evaluate(
         self,
@@ -279,6 +284,7 @@ class ProvenancePolicy:
         call: ToolCall,
         tools: list[ToolMetadata],
         tracker: ProvenanceTracker,
+        history,
     ) -> ProvenanceAssessment:
         inputs = tracker.input_artifacts(call)
         sink = tracker._sink(call) if self.features.sink_classification else None
@@ -286,9 +292,27 @@ class ProvenancePolicy:
         if not sink or not sensitive:
             return ProvenanceAssessment(Decision.ALLOW, [], [], [item.artifact_id for item in inputs], sink, None)
 
-        authorizations = self.authorization.resolve(scenario.user_request, scenario.external_content, tools)
-        authorized = self._transmission_authorized(authorizations, call) if self.features.scoped_authorization_integration else False
+        authorizations = self.authorization.resolve(
+            scenario.user_request,
+            scenario.external_content,
+            tools,
+            security_policy=self.security_policy,
+        )
+        authorized = (
+            self._transmission_authorized(authorizations, call, history)
+            if self.features.scoped_authorization_integration
+            else False
+        )
         if sink == "EXTERNAL_NETWORK":
+            if authorized:
+                return ProvenanceAssessment(
+                    Decision.ALLOW,
+                    ["AUTHORIZED_SENSITIVE_DATA_EGRESS"],
+                    ["Exact trusted scope authorizes this sensitive-data destination and method"],
+                    [item.artifact_id for item in inputs],
+                    sink,
+                    "HIGH",
+                )
             rules = ["SENSITIVE_DATA_TO_EXTERNAL_NETWORK_DENY"]
             if not authorized:
                 rules.append("HIGH_RISK_DATA_FLOW_REQUIRES_AUTHORIZATION")
@@ -296,6 +320,24 @@ class ProvenancePolicy:
                 Decision.BLOCK,
                 rules,
                 ["SECRET or SECRET-derived provenance reaches an external network sink"],
+                [item.artifact_id for item in inputs],
+                sink,
+                "CRITICAL",
+            )
+        if sink == "INTERNAL_NETWORK":
+            if authorized:
+                return ProvenanceAssessment(
+                    Decision.ALLOW,
+                    ["AUTHORIZED_SENSITIVE_DATA_EGRESS"],
+                    ["Trusted policy and user intent authorize this exact internal network egress"],
+                    [item.artifact_id for item in inputs],
+                    sink,
+                    "HIGH",
+                )
+            return ProvenanceAssessment(
+                Decision.BLOCK,
+                ["HIGH_RISK_DATA_FLOW_REQUIRES_AUTHORIZATION"],
+                ["Sensitive provenance reaches an internal network sink without an exact egress grant"],
                 [item.artifact_id for item in inputs],
                 sink,
                 "CRITICAL",
@@ -327,13 +369,6 @@ class ProvenancePolicy:
             "HIGH",
         )
 
-    def _transmission_authorized(self, grants: list[UserAuthorization], call: ToolCall) -> bool:
-        match = self.authorization.match(grants, call)
-        if not match.matched or match.source == AuthorizationSource.UNTRUSTED_CONTENT_REQUEST:
-            return False
-        return any(
-            call.tool_name in grant.allowed_tools
-            and grant.source != AuthorizationSource.UNTRUSTED_CONTENT_REQUEST
-            and bool(grant.constraints.get("may_transmit_secret"))
-            for grant in grants
-        )
+    def _transmission_authorized(self, grants: list[UserAuthorization], call: ToolCall, history) -> bool:
+        match = self.authorization.match_sensitive_egress(grants, call, history)
+        return bool(match.matched and match.source != AuthorizationSource.UNTRUSTED_CONTENT_REQUEST)

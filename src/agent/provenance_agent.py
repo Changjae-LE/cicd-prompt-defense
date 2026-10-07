@@ -21,7 +21,10 @@ class ProvenanceAgentMixin:
     def _initialize_provenance(self, features: ProvenanceFeatures | None) -> None:
         selected = features or ProvenanceFeatures()
         self.tracker = ProvenanceTracker(selected)
-        self.provenance_policy = ProvenancePolicy(selected)
+        self.provenance_policy = ProvenancePolicy(
+            selected,
+            security_policy=self.decision_engine.policy_engine.policy,
+        )
 
     def _combined_decision(self, scenario: Scenario, call: ToolCall, history: list[ExecutionEvent]):
         base = self.authorize(scenario, call, history)
@@ -30,6 +33,7 @@ class ProvenanceAgentMixin:
             call,
             self.registry.list_metadata(),
             self.tracker,
+            history,
         )
         decision = Decision.BLOCK if base.decision == Decision.BLOCK or flow.decision == Decision.BLOCK else base.decision
         risk = max(base.risk_score, 1.0 if flow.risk == "CRITICAL" else 0.8 if flow.risk == "HIGH" else 0.0)

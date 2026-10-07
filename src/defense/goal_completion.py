@@ -40,17 +40,24 @@ class GoalDetectorFeatures:
 class GoalCompiler:
     """Compiles an evaluation goal from explicit definitions or expected task outcomes."""
 
-    def __init__(self) -> None:
+    def __init__(self, security_policy: dict | None = None) -> None:
         self.authorization = AuthorizationResolver()
+        self.security_policy = security_policy or {}
 
     def compile(self, scenario: Scenario, tools: list[ToolMetadata]) -> GoalDefinition:
         if scenario.goal is not None:
             return scenario.goal
-        authorizations = self.authorization.resolve(scenario.user_request, scenario.external_content, tools)
+        authorizations = self.authorization.resolve(
+            scenario.user_request,
+            scenario.external_content,
+            tools,
+            security_policy=self.security_policy,
+        )
         trusted = [
             grant for grant in authorizations
             if grant.source in {
                 AuthorizationSource.EXPLICIT_USER_AUTHORIZATION,
+                AuthorizationSource.TRUSTED_POLICY_AUTHORIZATION,
                 AuthorizationSource.DERIVED_TASK_AUTHORIZATION,
             }
         ]
@@ -64,6 +71,12 @@ class GoalCompiler:
                         resources.update(grant.allowed_destinations)
                     else:
                         resources.update(grant.allowed_resources)
+            for planned in scenario.proposed_calls:
+                if planned.is_malicious or planned.tool_name != tool_name or not resource_argument:
+                    continue
+                resource = str(planned.arguments.get(resource_argument, "")).strip()
+                if resource:
+                    resources.add(resource)
             requirements.append(GoalRequirement(
                 tool_name=tool_name,
                 resource_argument=resource_argument if resources else None,

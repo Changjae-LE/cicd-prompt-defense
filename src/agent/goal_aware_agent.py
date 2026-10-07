@@ -40,7 +40,7 @@ class GoalAwareContextAgent(ContextAwareAgent):
         self.mode = mode
         self.name = mode.value
         self.post_task_audit_steps = max(0, post_task_audit_steps)
-        self.goal_compiler = GoalCompiler()
+        self.goal_compiler = GoalCompiler(self.decision_engine.policy_engine.policy)
         self.goal_detector = GoalCompletionDetector(goal_features)
         self.redundancy = RedundantToolCallDetector()
 

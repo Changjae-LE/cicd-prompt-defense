@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 import yaml
 
@@ -61,6 +62,18 @@ class PolicyEngine:
         authorization = self.authorization.match(context.user_authorizations, call)
         untrusted_authorization = self.authorization.match_untrusted(context.user_authorizations, call)
         scoped = self.features.use_scoped_authorization and authorization.matched
+        sensitive_egress_authorization = (
+            self.authorization.match_sensitive_egress(
+                context.user_authorizations,
+                call,
+                context.execution_history,
+            )
+            if self.features.use_scoped_authorization and exfiltration
+            else None
+        )
+        sensitive_egress_scoped = bool(
+            sensitive_egress_authorization and sensitive_egress_authorization.matched
+        )
         untrusted_scope_expansion = (
             self.features.use_scoped_authorization and untrusted_authorization.matched and not scoped
         )
@@ -75,9 +88,12 @@ class PolicyEngine:
         rules: list[str] = []
         reasons: list[str] = []
 
-        if exfiltration:
+        if exfiltration and not sensitive_egress_scoped:
             rules.append("SECRET_TO_NETWORK_DENY")
-            reasons.append("Secret access followed by network transmission is forbidden")
+            reasons.append("Secret access followed by network transmission lacks an exact trusted egress grant")
+        if exfiltration and sensitive_egress_scoped:
+            rules.append("SCOPED_SECRET_EGRESS_AUTHORIZATION")
+            reasons.append(sensitive_egress_authorization.reason)
         if meta.accesses_secret and not explicit and not scoped:
             rules.append("SECRET_REQUIRES_EXPLICIT_INTENT")
             reasons.append("Secret access is not explicitly required by the user")
@@ -96,6 +112,9 @@ class PolicyEngine:
         if privileged and not scoped:
             rules.append("HIGH_RISK_REQUIRES_INTENT")
             reasons.append("Arguments request privileged infrastructure configuration")
+        if self._security_control_mutation(call) and not scoped:
+            rules.append("SECURITY_CONTROL_SCOPE_DENY")
+            reasons.append("Security-control mutation is outside exact trusted user and policy scope")
         if meta.executes_command and call.arguments.get("command") not in self.policy["shell_allowlist"]:
             rules.append("SHELL_ALLOWLIST_ONLY")
             reasons.append("Shell command is outside the policy allowlist")
@@ -104,6 +123,7 @@ class PolicyEngine:
             "SECRET_TO_NETWORK_DENY", "SECRET_REQUIRES_EXPLICIT_INTENT", "UNTRUSTED_HIGH_RISK_DENY",
             "HIGH_RISK_REQUIRES_INTENT", "SHELL_ALLOWLIST_ONLY",
             "UNTRUSTED_SCOPE_EXPANSION_DENY",
+            "SECURITY_CONTROL_SCOPE_DENY",
         })
         if hard_deny:
             decision = Decision.BLOCK
@@ -128,5 +148,27 @@ class PolicyEngine:
             privilege_escalation=privilege_escalation or privileged,
             data_exfiltration_pattern=exfiltration,
             authorization_scope_match=scoped,
-            authorization_source=authorization.source if scoped else None,
+            authorization_source=(
+                sensitive_egress_authorization.source
+                if sensitive_egress_scoped and sensitive_egress_authorization
+                else authorization.source if scoped else None
+            ),
         )
+
+    def _security_control_mutation(self, call: ToolCall) -> bool:
+        if call.tool_name not in {"modify_manifest", "create_patch", "write_file"}:
+            return False
+        path = str(call.arguments.get("path", "")).lower()
+        content = str(call.arguments.get("content", "")).lower()
+        configured_paths = {
+            str(item).lower()
+            for item in self.policy.get("security_control_policy", {}).get("workflow_paths", [])
+        }
+        security_content = re.search(
+            r"cluster-admin|clusterrolebinding|rolebinding|\brbac\b|"
+            r"(?:disable|remove|omit|skip|replace)[^\n]{0,80}(?:scan|security check)|"
+            r"(?:scan|security check)[^\n]{0,80}(?:disable|remove|omit|skip|replace)",
+            content,
+            re.I,
+        )
+        return path in configured_paths or bool(security_content)
