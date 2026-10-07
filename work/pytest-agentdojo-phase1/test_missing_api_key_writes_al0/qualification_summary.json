@@ -1,0 +1,182 @@
+{
+  "status": "blocked_missing_api_key",
+  "agentdojo_version": "0.1.35",
+  "benchmark_version": "v1.2.2",
+  "python_version": "3.12.14",
+  "model_access": {
+    "requested_model": "gpt-4o-mini-2024-07-18",
+    "available": null,
+    "official_catalog_snapshot_listed": true,
+    "official_model_documentation": "https://developers.openai.com/api/docs/models/gpt-4o-mini",
+    "reason": "OPENAI_API_KEY is not set; account-specific snapshot access was not checked",
+    "fallback_model": null,
+    "automatic_substitution_performed": false
+  },
+  "selection": {
+    "selection_frozen_before_execution": true,
+    "selection_rule": "For each of banking, travel, workspace, and slack: take the two lowest numeric native user-task IDs with at least one injection vector visible on the native ground-truth trajectory and the two lowest numeric injection-task IDs with non-empty native Tool ground truth; use their 2x2 Cartesian product. Add one official-repository positive-control case. Do not replace cases after observing results.",
+    "selection_purpose": "signal-enriched qualification; not a population ASR estimate",
+    "attack": "important_instructions",
+    "requested_model": "gpt-4o-mini-2024-07-18",
+    "benchmark_version": "v1.2.2",
+    "suite_details": {
+      "banking": {
+        "selected_user_tasks": [
+          "user_task_0",
+          "user_task_1"
+        ],
+        "selected_injection_tasks": [
+          "injection_task_0",
+          "injection_task_1"
+        ]
+      },
+      "travel": {
+        "selected_user_tasks": [
+          "user_task_0",
+          "user_task_1"
+        ],
+        "selected_injection_tasks": [
+          "injection_task_0",
+          "injection_task_1"
+        ]
+      },
+      "workspace": {
+        "selected_user_tasks": [
+          "user_task_0",
+          "user_task_1"
+        ],
+        "selected_injection_tasks": [
+          "injection_task_0",
+          "injection_task_1"
+        ]
+      },
+      "slack": {
+        "selected_user_tasks": [
+          "user_task_0",
+          "user_task_1"
+        ],
+        "selected_injection_tasks": [
+          "injection_task_1",
+          "injection_task_2"
+        ]
+      }
+    },
+    "positive_control": {
+      "suite": "banking",
+      "user_task_id": "user_task_11",
+      "injection_task_id": "injection_task_0",
+      "selection_reason": "official_repository_positive_control",
+      "source": "https://github.com/ethz-spylab/agentdojo/blob/main/runs/gpt-4o-mini-2024-07-18/banking/user_task_11/important_instructions/injection_task_0.json"
+    },
+    "cases": [
+      {
+        "suite": "banking",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "banking",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "banking",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "banking",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "travel",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "travel",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "travel",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "travel",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "workspace",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "workspace",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "workspace",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "workspace",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "slack",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "slack",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_2",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "slack",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "slack",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_2",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "banking",
+        "user_task_id": "user_task_11",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "official_repository_positive_control",
+        "source": "https://github.com/ethz-spylab/agentdojo/blob/main/runs/gpt-4o-mini-2024-07-18/banking/user_task_11/important_instructions/injection_task_0.json"
+      }
+    ],
+    "case_count": 17
+  },
+  "positive_control_trace": null,
+  "selected_model": null,
+  "reason": "missing OpenAI API credential",
+  "metrics": null
+}

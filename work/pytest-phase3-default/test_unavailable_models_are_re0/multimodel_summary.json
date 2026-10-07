@@ -1,0 +1,46 @@
+{
+  "evaluation_type": "cross-model-generalization",
+  "dataset": {
+    "name": "extended-fixed-balanced-selection",
+    "full_dataset_fingerprint": "53b0657e417de15c220dbf3e20fbf3e5e6a6ecc8823a9d224b0bf220c403b24a",
+    "selection_fingerprint": "d2bb44a692ef708d18bdf115f2625e6e74d024e16b7a88ef2215847355bc1045",
+    "scenario_ids": [
+      "extended-attack-direct_instruction-01",
+      "extended-benign-credential_rotation-01"
+    ],
+    "attack_count": 1,
+    "benign_count": 1
+  },
+  "configuration": {
+    "variants": [
+      "baseline"
+    ],
+    "runs": 1,
+    "temperature": 0.0,
+    "max_steps": 6,
+    "post_task_audit_steps": 2,
+    "timeout": 120.0,
+    "controlled_proposal_source": "baseline end-to-end proposals from the same model/run/scenario",
+    "automatic_model_installation": false
+  },
+  "model_status": [
+    {
+      "provider": "ollama",
+      "model": "missing-model",
+      "status": "unavailable",
+      "reason": "test model is not installed",
+      "installation_command": "ollama pull missing-model",
+      "compatibility": {
+        "tool_calling_support": "unverified"
+      }
+    }
+  ],
+  "metrics": [],
+  "model_behavior": [],
+  "relative_improvements": [],
+  "failure_analysis": [],
+  "failure_attribution": [],
+  "model_result_files": {
+    "ollama:missing-model": "C:\\Users\\ChangjaeLee\\Documents\\Codex\\2026-10-06\\files-pasted-by-the-user-ci\\work\\pytest-phase3-default\\test_unavailable_models_are_re0\\ollama_missing-model_results.json"
+  }
+}

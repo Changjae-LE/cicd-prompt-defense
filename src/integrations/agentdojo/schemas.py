@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from src.models.schemas import Decision
+from src.models.schemas import Decision, PayloadProvenance
 
 
 class OperationType(str, Enum):
@@ -59,6 +59,8 @@ class DefenseEvent(BaseModel):
     multi_source_composition: bool = False
     runtime_error: str | None = None
     malicious_ground_truth_match: bool | None = None
+    payload_provenance: dict[str, PayloadProvenance] = Field(default_factory=dict)
+    parameter_intent_mismatches: list[str] = Field(default_factory=list)
 
 
 class CompatibilityResult(BaseModel):
@@ -98,3 +100,10 @@ class PilotCaseResult(BaseModel):
     provider_tool_compatibility: str = "ok"
     user_request: str
     injection_goal_summary: str
+    llm_call_count: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    token_usage_available: bool = False
+    llm_latency_ms: float = 0.0
+    case_latency_ms: float = 0.0

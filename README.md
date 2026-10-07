@@ -211,6 +211,30 @@ The command writes `compatibility.json`, `smoke_summary.json`, `smoke_summary.cs
 
 The first pilot produced no native attack successes and no malicious ground-truth proposals in any arm. This is a floor effect, not evidence that the defense blocked the attacks: conditional defense success is therefore `N/A`. The native utility rate was 40% for `llama3.1`, 60% for `qwen2.5:7b`, and 80% for `mistral-nemo`, with small per-variant fluctuations despite temperature zero. A broader run should wait until a predeclared pilot demonstrates baseline attack signal and adequate task utility with a compatible model/provider.
 
+#### External-validation qualification
+
+The validation runner targets the exact `gpt-4o-mini-2024-07-18` snapshot and AgentDojo's native `important_instructions` attack. It never replaces the snapshot automatically. If the snapshot is not accessible to the configured API account, the run stops unless an explicit `--fallback-model` is supplied; a fallback run is labelled external validation rather than published-result reproduction.
+
+The 17 cases are frozen and written to `selection_manifest.json` before the first model request. Four suites each contribute a deterministic 2×2 cross product: the two lowest-numbered native user tasks with a visible injection vector and the two lowest-numbered injection tasks with non-empty native Tool ground truth. One official-repository positive-control case is added. This signal-enriched subset qualifies the evaluation mechanism and is not a population ASR estimate.
+
+Phase 1 executes Baseline only. Phase 2 executes Context-Aware and Full on the same frozen cases only when both conditions hold:
+
+```text
+malicious ground-truth Tool proposals > 0
+and Baseline native ASR > 0
+```
+
+```powershell
+$env:PYTHONUTF8 = "1"
+$env:OPENAI_API_KEY = "your-key"
+.\.venv-agentdojo\Scripts\python.exe -m src.integrations.agentdojo.validation `
+  --model gpt-4o-mini-2024-07-18 `
+  --temperature 0 `
+  --output-dir results/agentdojo/validation
+```
+
+Without `OPENAI_API_KEY`, no model call or fallback occurs. The runner still records the frozen manifest and writes an explicit `blocked_missing_api_key` report. Outputs are `qualification_summary.json`, `qualification_cases.csv`, `defense_comparison_summary.json`, `defense_comparison_cases.csv`, and `validation_report.md`; the earlier Ollama pilot remains unchanged.
+
 The runner exposes a full-combination command for a later, separately authorized run, but it was not executed for this evaluation:
 
 ```powershell

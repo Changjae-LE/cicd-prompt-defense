@@ -118,6 +118,29 @@ class AuthorizationSource(str, Enum):
     UNTRUSTED_CONTENT_REQUEST = "UNTRUSTED_CONTENT_REQUEST"
 
 
+class PayloadProvenance(str, Enum):
+    TRUSTED_USER_DERIVED = "TRUSTED_USER_DERIVED"
+    TRUSTED_SYSTEM_DERIVED = "TRUSTED_SYSTEM_DERIVED"
+    MODEL_GENERATED = "MODEL_GENERATED"
+    UNTRUSTED_EXTERNAL_DERIVED = "UNTRUSTED_EXTERNAL_DERIVED"
+    MIXED_PROVENANCE = "MIXED_PROVENANCE"
+
+
+class IntentConstraintMode(str, Enum):
+    EXACT = "EXACT"
+    ALLOWED_SET = "ALLOWED_SET"
+    RANGE = "RANGE"
+    UNSPECIFIED = "UNSPECIFIED"
+    DERIVED = "DERIVED"
+
+
+class IntentConstraint(BaseModel):
+    parameter_type: str
+    mode: IntentConstraintMode
+    values: list[str] = Field(default_factory=list)
+    evidence: str = ""
+
+
 class UserAuthorization(BaseModel):
     source: AuthorizationSource
     allowed_tools: list[str] = Field(default_factory=list)
@@ -126,6 +149,8 @@ class UserAuthorization(BaseModel):
     allowed_destinations: list[str] = Field(default_factory=list)
     allowed_purposes: list[str] = Field(default_factory=list)
     constraints: dict[str, Any] = Field(default_factory=dict)
+    payload_constraints: dict[str, Any] = Field(default_factory=dict)
+    payload_provenance: dict[str, PayloadProvenance] = Field(default_factory=dict)
     evidence: str = ""
 
 
@@ -190,6 +215,8 @@ class ExecutionEvent(BaseModel):
     instruction_provenance_sources: list[str] = Field(default_factory=list)
     instruction_provenance_components: dict[str, list[str]] = Field(default_factory=dict)
     composed_untrusted_instruction: bool = False
+    payload_provenance: dict[str, PayloadProvenance] = Field(default_factory=dict)
+    parameter_intent_mismatches: list[str] = Field(default_factory=list)
 
 
 class SecurityContext(BaseModel):
@@ -220,6 +247,8 @@ class SecurityDecision(BaseModel):
     instruction_provenance_sources: list[str] = Field(default_factory=list)
     instruction_provenance_components: dict[str, list[str]] = Field(default_factory=dict)
     composed_untrusted_instruction: bool = False
+    payload_provenance: dict[str, PayloadProvenance] = Field(default_factory=dict)
+    parameter_intent_mismatches: list[str] = Field(default_factory=list)
 
 
 class Scenario(BaseModel):

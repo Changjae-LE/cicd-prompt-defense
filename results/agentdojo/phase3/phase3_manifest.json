@@ -1,0 +1,192 @@
+{
+  "status": "completed",
+  "agentdojo_version": "0.1.35",
+  "benchmark_version": "v1.2.2",
+  "model": "gpt-4o-mini-2024-07-18",
+  "model_access": {
+    "model": "gpt-4o-mini-2024-07-18",
+    "available": true,
+    "resolved_id": "gpt-4o-mini-2024-07-18",
+    "error": null
+  },
+  "function_calling": {
+    "available": true,
+    "tool_call_id_preserved": true,
+    "error": null
+  },
+  "attack": "important_instructions",
+  "temperature": 0.0,
+  "case_count": 17,
+  "variants": [
+    "context-aware",
+    "full",
+    "refined-full"
+  ],
+  "selection_manifest_matches_phase1": true,
+  "published_result_reproduction_claimed": false,
+  "controlled_proposal_source": "Phase 3 Baseline recollection",
+  "phase1_phase2_results_overwritten": false,
+  "selection": {
+    "selection_frozen_before_execution": true,
+    "selection_rule": "For each of banking, travel, workspace, and slack: take the two lowest numeric native user-task IDs with at least one injection vector visible on the native ground-truth trajectory and the two lowest numeric injection-task IDs with non-empty native Tool ground truth; use their 2x2 Cartesian product. Add one official-repository positive-control case. Do not replace cases after observing results.",
+    "selection_purpose": "signal-enriched qualification; not a population ASR estimate",
+    "attack": "important_instructions",
+    "requested_model": "gpt-4o-mini-2024-07-18",
+    "benchmark_version": "v1.2.2",
+    "suite_details": {
+      "banking": {
+        "selected_user_tasks": [
+          "user_task_0",
+          "user_task_1"
+        ],
+        "selected_injection_tasks": [
+          "injection_task_0",
+          "injection_task_1"
+        ]
+      },
+      "travel": {
+        "selected_user_tasks": [
+          "user_task_0",
+          "user_task_1"
+        ],
+        "selected_injection_tasks": [
+          "injection_task_0",
+          "injection_task_1"
+        ]
+      },
+      "workspace": {
+        "selected_user_tasks": [
+          "user_task_0",
+          "user_task_1"
+        ],
+        "selected_injection_tasks": [
+          "injection_task_0",
+          "injection_task_1"
+        ]
+      },
+      "slack": {
+        "selected_user_tasks": [
+          "user_task_0",
+          "user_task_1"
+        ],
+        "selected_injection_tasks": [
+          "injection_task_1",
+          "injection_task_2"
+        ]
+      }
+    },
+    "positive_control": {
+      "suite": "banking",
+      "user_task_id": "user_task_11",
+      "injection_task_id": "injection_task_0",
+      "selection_reason": "official_repository_positive_control",
+      "source": "https://github.com/ethz-spylab/agentdojo/blob/main/runs/gpt-4o-mini-2024-07-18/banking/user_task_11/important_instructions/injection_task_0.json"
+    },
+    "cases": [
+      {
+        "suite": "banking",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "banking",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "banking",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "banking",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "travel",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "travel",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "travel",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "travel",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "workspace",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "workspace",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "workspace",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "workspace",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "slack",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "slack",
+        "user_task_id": "user_task_0",
+        "injection_task_id": "injection_task_2",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "slack",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_1",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "slack",
+        "user_task_id": "user_task_1",
+        "injection_task_id": "injection_task_2",
+        "selection_reason": "deterministic_native_2x2"
+      },
+      {
+        "suite": "banking",
+        "user_task_id": "user_task_11",
+        "injection_task_id": "injection_task_0",
+        "selection_reason": "official_repository_positive_control",
+        "source": "https://github.com/ethz-spylab/agentdojo/blob/main/runs/gpt-4o-mini-2024-07-18/banking/user_task_11/important_instructions/injection_task_0.json"
+      }
+    ],
+    "case_count": 17
+  }
+}

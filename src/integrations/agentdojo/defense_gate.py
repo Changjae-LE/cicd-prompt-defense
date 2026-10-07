@@ -12,6 +12,8 @@ from agentdojo.functions_runtime import EmptyEnv, Env, FunctionsRuntime
 from agentdojo.types import ChatMessage, ChatToolResultMessage, text_content_block_from_string
 
 from src.defense.decision_engine import DecisionEngine
+from src.defense.parameter_intent import ParameterIntentAnalyzer
+from src.defense.payload_provenance import PayloadProvenanceAnalyzer
 from src.defense.policy_engine import PolicyEngine, PolicyFeatures
 from src.integrations.agentdojo.adapter import AgentDojoActionMapper
 from src.integrations.agentdojo.provenance_adapter import AgentDojoProvenanceAdapter
@@ -107,6 +109,10 @@ class AgentDojoTrustedScope:
             allowed_destinations=destinations,
             allowed_purposes=["agentdojo_native_user_task"],
             constraints=constraints,
+            payload_constraints={
+                "payload_requires_independent_scope": action.operation_type
+                in {OperationType.EXTERNAL_COMMUNICATION, OperationType.FINANCIAL_TRANSFER},
+            },
             evidence=query[:240],
         )
 
@@ -115,13 +121,15 @@ class AgentDojoDefenseBridge:
     """Apply the existing policy engine to normalized AgentDojo actions."""
 
     def __init__(self, variant: str) -> None:
-        if variant not in {"context-aware", "full"}:
-            raise ValueError("Defense bridge supports context-aware and full variants")
+        if variant not in {"context-aware", "full", "refined-full"}:
+            raise ValueError("Defense bridge supports context-aware, full, and refined-full variants")
         self.variant = variant
-        features = PolicyFeatures(use_scoped_authorization=variant == "full")
+        features = PolicyFeatures(use_scoped_authorization=variant in {"full", "refined-full"})
         registry = build_default_registry(FakeEnvironment())
         self.engine = DecisionEngine(registry, PolicyEngine(features=features))
         self.scope = AgentDojoTrustedScope()
+        self.payload_provenance = PayloadProvenanceAnalyzer()
+        self.parameter_intent = ParameterIntentAnalyzer()
 
     def evaluate(
         self,
@@ -149,7 +157,9 @@ class AgentDojoDefenseBridge:
         if grant is not None:
             context.user_authorizations = [grant, *context.user_authorizations]
         decision = self.engine.policy_engine.evaluate(context, call)
-        if self.variant != "full" or not action.high_risk or trusted_match:
+        if self.variant == "refined-full":
+            decision = self._refine_decision(query, action, list(external_content), decision)
+        if self.variant not in {"full", "refined-full"} or not action.high_risk or trusted_match:
             return decision
 
         rules = list(decision.triggered_policy_rules)
@@ -168,6 +178,42 @@ class AgentDojoDefenseBridge:
             "triggered_policy_rules": list(dict.fromkeys(rules)),
             "authorization_scope_match": False,
             "authorization_source": None,
+        })
+
+    def _refine_decision(
+        self,
+        query: str,
+        action: ProposedAction,
+        external_content,
+        decision: SecurityDecision,
+    ) -> SecurityDecision:
+        payload = self.payload_provenance.assess(query, action.arguments, external_content)
+        intent = self.parameter_intent.assess(
+            query,
+            action.native_tool,
+            action.arguments,
+            external_content,
+        )
+        rules = list(decision.triggered_policy_rules)
+        reasons = list(decision.reasons)
+        refined_deny = False
+        if payload.unsafe_raw_propagation and action.operation_type != OperationType.READ_ONLY:
+            rules.extend(["PAYLOAD_SCOPE_MISMATCH", "UNTRUSTED_PAYLOAD_PROPAGATION_DENY"])
+            reasons.extend(payload.reasons)
+            refined_deny = True
+        if intent.explicit_mismatch:
+            rules.append("PARAMETER_INTENT_MISMATCH")
+            reasons.extend(intent.reasons)
+            if intent.untrusted_overrides:
+                rules.append("UNTRUSTED_PARAMETER_OVERRIDE_DENY")
+            refined_deny = True
+        return decision.model_copy(update={
+            "decision": Decision.BLOCK if refined_deny else decision.decision,
+            "risk_score": max(decision.risk_score, 0.95) if refined_deny else decision.risk_score,
+            "reasons": list(dict.fromkeys(reasons)),
+            "triggered_policy_rules": list(dict.fromkeys(rules)),
+            "payload_provenance": payload.argument_provenance,
+            "parameter_intent_mismatches": intent.mismatches,
         })
 
     @staticmethod
@@ -272,6 +318,8 @@ class DefenseAwareToolsExecutor(BasePipelineElement):
             provenance_components=decision.instruction_provenance_components,
             multi_source_composition=decision.composed_untrusted_instruction,
             runtime_error=runtime_error,
+            payload_provenance=decision.payload_provenance,
+            parameter_intent_mismatches=decision.parameter_intent_mismatches,
         ))
 
     def _append_policy_history(self, action, decision, *, executed: bool, runtime_error: str | None) -> None:
@@ -298,6 +346,8 @@ class DefenseAwareToolsExecutor(BasePipelineElement):
             instruction_provenance_sources=decision.instruction_provenance_sources,
             instruction_provenance_components=decision.instruction_provenance_components,
             composed_untrusted_instruction=decision.composed_untrusted_instruction,
+            payload_provenance=decision.payload_provenance,
+            parameter_intent_mismatches=decision.parameter_intent_mismatches,
         ))
 
 
@@ -333,4 +383,3 @@ class RecordingToolsExecutor(BasePipelineElement):
                 runtime_error=error,
             ))
         return output
-
