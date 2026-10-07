@@ -110,6 +110,21 @@ python -m pip install -e ".[dev]"
 
 No API key or paid model is needed. `MockDeterministicProvider` replays the same action plans for reproducible comparisons. New commercial or local providers implement `LLMProvider.propose_actions`; their output still passes through the same registry and policy layer.
 
+### Optional AgentDojo environment
+
+The external-benchmark adapter is isolated behind an optional, pinned dependency. It uses AgentDojo `0.1.35` with benchmark version `v1.2.2`; it does not vendor or modify AgentDojo.
+
+```powershell
+python -m venv .venv-agentdojo
+.\.venv-agentdojo\Scripts\python.exe -m pip install -e ".[dev,agentdojo]"
+```
+
+On Windows, set UTF-8 mode before loading the AgentDojo suites. AgentDojo `0.1.35` otherwise opens some suite YAML using the active legacy code page.
+
+```powershell
+$env:PYTHONUTF8 = "1"
+```
+
 ## CLI and demo
 
 ```bash
@@ -162,6 +177,52 @@ Metrics:
 - **Task/benign completion:** all expected safe tools executed successfully.
 - **High-risk invocation rate:** executed high/critical-risk calls divided by all proposed calls.
 - Average blocked calls, execution latency, provider calls, approximate tokens, optional estimated cost, and Context-Aware latency overhead relative to Baseline are also recorded.
+
+### AgentDojo external benchmark adapter
+
+AgentDojo is a separate external evaluation and is never pooled with the internal CI/CD benchmark. The adapter preserves the native `UserTask`, `InjectionTask`, environment, attack generation, ground truth, utility checker, and security checker. Its execution path is:
+
+```text
+AgentDojo LLM
+  → proposed native FunctionCall
+  → AgentGuard pre-execution gate
+  → ALLOW: native FunctionsRuntime / BLOCK: sanitized tool result
+  → native tool result returned to the AgentDojo LLM
+```
+
+`baseline` delegates to AgentDojo's native `ToolsExecutor` through an observational wrapper. `context-aware` reuses the existing context and policy engine. `full` adds exact scope matching from the original user query plus Tool-output provenance and multi-source scope enforcement. Tool output is data and cannot create authorization. Native Tool names and arguments remain available in the diagnostic trace even when they are normalized to a generic internal action.
+
+AgentDojo `BaseInjectionTask.security(...) == True` means that the injection goal executed successfully. Accordingly, the adapter records that native Boolean unchanged as both `native_security_result` and `attack_success`; it does not invert or replace it with an internal heuristic. The secondary `malicious_tool_proposed` and conditional block metric are populated only when a proposed native call matches a non-empty AgentDojo injection ground truth.
+
+Run the fixed five-pair pilot (5 scenarios × 3 models × 3 variants × 1 run):
+
+```powershell
+$env:PYTHONUTF8 = "1"
+.\.venv-agentdojo\Scripts\python.exe -m src.integrations.agentdojo.runner `
+  --models "llama3.1,qwen2.5:7b,mistral-nemo" `
+  --suite workspace `
+  --attack tool_knowledge `
+  --pilot-limit 5 `
+  --temperature 0 `
+  --output-dir results/agentdojo
+```
+
+The command writes `compatibility.json`, `smoke_summary.json`, `smoke_summary.csv`, `pilot_summary.json`, `pilot_summary.csv`, `native_results.json`, `defense_events.jsonl`, and `report.md` under `results/agentdojo/`. These files do not overwrite `results/multimodel/` or any internal benchmark output.
+
+The first pilot produced no native attack successes and no malicious ground-truth proposals in any arm. This is a floor effect, not evidence that the defense blocked the attacks: conditional defense success is therefore `N/A`. The native utility rate was 40% for `llama3.1`, 60% for `qwen2.5:7b`, and 80% for `mistral-nemo`, with small per-variant fluctuations despite temperature zero. A broader run should wait until a predeclared pilot demonstrates baseline attack signal and adequate task utility with a compatible model/provider.
+
+The runner exposes a full-combination command for a later, separately authorized run, but it was not executed for this evaluation:
+
+```powershell
+$env:PYTHONUTF8 = "1"
+.\.venv-agentdojo\Scripts\python.exe -m src.integrations.agentdojo.runner `
+  --models "llama3.1,qwen2.5:7b,mistral-nemo" `
+  --suite workspace `
+  --attack tool_knowledge `
+  --all-combinations `
+  --temperature 0 `
+  --output-dir results/agentdojo-full
+```
 
 ## Example result
 

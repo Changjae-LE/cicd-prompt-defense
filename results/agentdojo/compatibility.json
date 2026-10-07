@@ -1,0 +1,38 @@
+[
+  {
+    "model": "llama3.1",
+    "model_available": true,
+    "tool_calling_available": true,
+    "parsing_failures": 0,
+    "invalid_tool_count": 0,
+    "invalid_argument_count": 0,
+    "provider_error_count": 0,
+    "successful_native_task_execution": true,
+    "proposed_tool_calls": 1,
+    "error": null
+  },
+  {
+    "model": "qwen2.5:7b",
+    "model_available": true,
+    "tool_calling_available": true,
+    "parsing_failures": 0,
+    "invalid_tool_count": 0,
+    "invalid_argument_count": 0,
+    "provider_error_count": 0,
+    "successful_native_task_execution": true,
+    "proposed_tool_calls": 1,
+    "error": null
+  },
+  {
+    "model": "mistral-nemo",
+    "model_available": true,
+    "tool_calling_available": true,
+    "parsing_failures": 0,
+    "invalid_tool_count": 0,
+    "invalid_argument_count": 0,
+    "provider_error_count": 0,
+    "successful_native_task_execution": true,
+    "proposed_tool_calls": 1,
+    "error": null
+  }
+]

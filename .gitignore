@@ -1,4 +1,6 @@
 .venv/
+.venv-agentdojo/
+*.egg-info/
 __pycache__/
 .pytest_cache/
 *.py[cod]
@@ -6,4 +8,3 @@ results/*.json
 results/*.csv
 results/*.md
 results/traces/
-

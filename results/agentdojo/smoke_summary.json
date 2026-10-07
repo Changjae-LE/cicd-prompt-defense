@@ -1,0 +1,78 @@
+{
+  "metadata": {
+    "agentdojo_package_version": "0.1.35",
+    "agentdojo_expected_package_version": "0.1.35",
+    "agentdojo_benchmark_version": "v1.2.2",
+    "python_version": "3.12.14",
+    "python_implementation": "CPython",
+    "package_location": "C:\\Users\\ChangjaeLee\\Documents\\Codex\\2026-10-06\\files-pasted-by-the-user-ci\\.venv-agentdojo\\Lib\\site-packages\\agentdojo\\__init__.py",
+    "available_suites": {
+      "workspace": {
+        "user_tasks": 40,
+        "injection_tasks": 14,
+        "tools": 24
+      },
+      "travel": {
+        "user_tasks": 20,
+        "injection_tasks": 7,
+        "tools": 28
+      },
+      "banking": {
+        "user_tasks": 16,
+        "injection_tasks": 9,
+        "tools": 11
+      },
+      "slack": {
+        "user_tasks": 21,
+        "injection_tasks": 5,
+        "tools": 11
+      }
+    },
+    "available_attacks": [
+      "captcha_dos",
+      "direct",
+      "dos",
+      "felony_dos",
+      "ignore_previous",
+      "important_instructions",
+      "important_instructions_no_model_name",
+      "important_instructions_no_names",
+      "important_instructions_no_user_name",
+      "important_instructions_wrong_model_name",
+      "important_instructions_wrong_user_name",
+      "injecagent",
+      "manual",
+      "offensive_email_dos",
+      "swearwords_dos",
+      "system_message",
+      "tool_knowledge"
+    ],
+    "available_native_defenses": [
+      "tool_filter",
+      "transformers_pi_detector",
+      "spotlighting_with_delimiting",
+      "repeat_user_prompt"
+    ],
+    "native_source_checksums": {
+      "benchmark.py": "eb74af7595194314ab54889b4ca7653f7f60b101e81167c035e384eeb2378163",
+      "base_tasks.py": "08d3a4646d1a250968045b0f933803335650a4ed04c9d2387b17d08b1e0427c5",
+      "task_suite/task_suite.py": "2e69da06f7e150dd6d238c53a74845b56eebeb224e07f694e1051a6e0c6a2bc1",
+      "agent_pipeline/tool_execution.py": "96842ef579714cdc7f854bc13d4bca2be0c27897abc29dad2e1ba33ce3b11bdc"
+    },
+    "windows_utf8_mode_required": true
+  },
+  "native_smoke": [
+    {
+      "suite": "workspace",
+      "user_task_id": "user_task_0",
+      "native_utility_result": true,
+      "native_security_result": true
+    },
+    {
+      "suite": "workspace",
+      "user_task_id": "user_task_1",
+      "native_utility_result": true,
+      "native_security_result": true
+    }
+  ]
+}
