@@ -379,6 +379,9 @@ def _outcome(mode: str, run: int, variant: str, scenario: Scenario, result: Task
                 "provenance_rules": event.provenance_policy_rules,
                 "input_artifact_ids": event.input_artifact_ids,
                 "output_artifact_ids": event.output_artifact_ids,
+                "instruction_provenance_sources": event.instruction_provenance_sources,
+                "instruction_provenance_components": event.instruction_provenance_components,
+                "composed_untrusted_instruction": event.composed_untrusted_instruction,
                 "error_code": event.result.error_code if event.result else None,
             }
             for event in result.events
@@ -567,11 +570,14 @@ def run_multimodel_evaluation(
     post_task_audit_steps: int = 2,
     timeout: float = 120.0,
     provider_builder: Callable[[ModelSpec], LLMProvider] | None = None,
+    scenarios_override: list[Scenario] | None = None,
+    dataset_name: str = "extended-fixed-balanced-selection",
+    full_dataset_fingerprint: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Path]]:
     if runs <= 0 or limit <= 0 or max_steps <= 0:
         raise ValueError("runs, limit, and max_steps must be positive")
     variants = parse_variants(variants)
-    scenarios = select_multimodel_scenarios(limit)
+    scenarios = list(scenarios_override) if scenarios_override is not None else select_multimodel_scenarios(limit)
     scenario_ids = [scenario.id for scenario in scenarios]
     selection_fingerprint = hashlib.sha256("\n".join(scenario_ids).encode()).hexdigest()
     model_payloads = []
@@ -629,8 +635,8 @@ def run_multimodel_evaluation(
     payload = redact({
         "evaluation_type": "cross-model-generalization",
         "dataset": {
-            "name": "extended-fixed-balanced-selection",
-            "full_dataset_fingerprint": extended_dataset_fingerprint(load_extended_scenarios()),
+            "name": dataset_name,
+            "full_dataset_fingerprint": full_dataset_fingerprint or extended_dataset_fingerprint(load_extended_scenarios()),
             "selection_fingerprint": selection_fingerprint,
             "scenario_ids": scenario_ids,
             "attack_count": sum(scenario.kind == "attack" for scenario in scenarios),
@@ -869,6 +875,18 @@ def _render_report(payload: dict[str, Any]) -> str:
     else:
         lines.append("Baseline and Full were not both selected, so relative improvement is unavailable.")
 
+    run_count = int(payload["configuration"]["runs"])
+    if run_count == 1:
+        replication_boundary = (
+            "- This single deterministic run is a compatibility/regression observation, not a confidence interval "
+            "or population-level generalization estimate."
+        )
+    else:
+        replication_boundary = (
+            f"- The {run_count} deterministic repetitions provide descriptive replication only; repeated outcomes "
+            "are not confidence intervals or evidence of statistical significance."
+        )
+
     lines.extend([
         "",
         "## Model behavior (Baseline proposal source)",
@@ -987,7 +1005,7 @@ def _render_report(payload: dict[str, Any]) -> str:
         "- Inferred self-refusal means no malicious-labelled Tool was proposed; it cannot distinguish explicit refusal from simply ignoring or misunderstanding the injected text.",
         "- Parsing, invalid Tool/argument, provider, repeated-failure, and max-step outcomes are compatibility failures and are not credited as security detections.",
         "- `PARSING_ERROR` includes invalid JSON and other malformed Tool decision formats because the provider abstraction safely rejects them before execution.",
-        "- Smoke samples and one run are compatibility checks, not confidence intervals or population-level generalization evidence.",
+        replication_boundary,
         "- All Tools, network requests, cluster operations, files, and Secrets remain simulated.",
         "",
     ])

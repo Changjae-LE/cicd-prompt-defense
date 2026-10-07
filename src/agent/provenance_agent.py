@@ -47,6 +47,9 @@ class ProvenanceAgentMixin:
             data_exfiltration_pattern=base.data_exfiltration_pattern or "SENSITIVE_DATA_TO_EXTERNAL_NETWORK_DENY" in flow.rules,
             authorization_scope_match=base.authorization_scope_match,
             authorization_source=base.authorization_source,
+            instruction_provenance_sources=base.instruction_provenance_sources,
+            instruction_provenance_components=base.instruction_provenance_components,
+            composed_untrusted_instruction=base.composed_untrusted_instruction,
         )
         return merged, flow
 
@@ -79,6 +82,9 @@ class ProvenanceAgentMixin:
             data_exfiltration_pattern=decision.data_exfiltration_pattern,
             authorization_scope_match=decision.authorization_scope_match,
             authorization_source=decision.authorization_source,
+            instruction_provenance_sources=decision.instruction_provenance_sources,
+            instruction_provenance_components=decision.instruction_provenance_components,
+            composed_untrusted_instruction=decision.composed_untrusted_instruction,
             input_artifact_ids=flow.input_artifact_ids,
             output_artifact_ids=[item.artifact_id for item in outputs],
             provenance_policy_rules=flow.rules,
@@ -145,6 +151,9 @@ class ProvenanceGoalAwareAgent(ProvenanceAgentMixin, GoalAwareContextAgent):
             data_exfiltration_pattern=decision.data_exfiltration_pattern,
             authorization_scope_match=decision.authorization_scope_match,
             authorization_source=decision.authorization_source,
+            instruction_provenance_sources=decision.instruction_provenance_sources,
+            instruction_provenance_components=decision.instruction_provenance_components,
+            composed_untrusted_instruction=decision.composed_untrusted_instruction,
             execution_phase=ExecutionPhase.POST_TASK_AUDIT,
             before_goal_completion=False,
             redundant=self.redundancy.is_redundant(call, history, goal),

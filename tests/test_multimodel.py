@@ -94,6 +94,9 @@ def test_multimodel_writes_end_to_end_and_controlled_outputs(tmp_path):
     assert all(row["llm_call_count_mean"] == 0 for row in controlled)
     assert payload["configuration"]["controlled_proposal_source"].startswith("baseline")
     assert (tmp_path / "test_model-one_results.json").exists()
+    report = paths["report"].read_text(encoding="utf-8")
+    assert "The 2 deterministic repetitions provide descriptive replication only" in report
+    assert "Smoke samples and one run" not in report
 
 
 def test_unavailable_models_are_recorded_without_installing(tmp_path):

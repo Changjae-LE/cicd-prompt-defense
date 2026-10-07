@@ -187,6 +187,9 @@ class ExecutionEvent(BaseModel):
     input_artifact_ids: list[str] = Field(default_factory=list)
     output_artifact_ids: list[str] = Field(default_factory=list)
     provenance_policy_rules: list[str] = Field(default_factory=list)
+    instruction_provenance_sources: list[str] = Field(default_factory=list)
+    instruction_provenance_components: dict[str, list[str]] = Field(default_factory=dict)
+    composed_untrusted_instruction: bool = False
 
 
 class SecurityContext(BaseModel):
@@ -214,6 +217,9 @@ class SecurityDecision(BaseModel):
     data_exfiltration_pattern: bool = False
     authorization_scope_match: bool = False
     authorization_source: AuthorizationSource | None = None
+    instruction_provenance_sources: list[str] = Field(default_factory=list)
+    instruction_provenance_components: dict[str, list[str]] = Field(default_factory=dict)
+    composed_untrusted_instruction: bool = False
 
 
 class Scenario(BaseModel):

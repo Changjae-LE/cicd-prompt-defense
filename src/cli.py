@@ -22,6 +22,7 @@ from src.evaluation.multimodel_runner import (
     parse_variants,
     run_multimodel_evaluation,
 )
+from src.evaluation.multi_source_holdout_runner import run_multi_source_holdout_evaluation
 from src.evaluation.llm_runner import build_provider, run_llm_evaluation, select_scenarios
 from src.models.schemas import AgentMetrics, TaskResult
 from src.providers.base import ProviderError
@@ -327,7 +328,7 @@ def command_evaluate_multimodel(
     )
     maximum_calls = len(specs) * limit * runs * calls_per_scenario
     print(
-        f"Starting multi-model smoke: models={len(specs)}, scenarios={limit}, runs={runs}, "
+        f"Starting multi-model evaluation: models={len(specs)}, scenarios={limit}, runs={runs}, "
         f"variants={','.join(selected_variants)}, upper-bound model calls={maximum_calls}."
     )
     payload, paths = run_multimodel_evaluation(
@@ -353,6 +354,41 @@ def command_evaluate_multimodel(
                 f"FPR={row['false_positive_rate_mean']:.1%}, "
                 f"completion={row['benign_completion_rate_mean']:.1%}"
             )
+    for label, path in paths.items():
+        print(f"{label}: {path}")
+
+
+def command_evaluate_multi_source_holdout(
+    *,
+    ollama_models: str,
+    openai_models: str,
+    runs: int,
+    temperature: float,
+    max_steps: int,
+    post_task_audit_steps: int,
+    timeout: float,
+) -> None:
+    specs = [
+        ModelSpec("ollama", model.strip())
+        for model in ollama_models.split(",") if model.strip()
+    ]
+    specs.extend(
+        ModelSpec("openai", model.strip())
+        for model in openai_models.split(",") if model.strip()
+    )
+    if not specs:
+        raise SystemExit("Specify at least one model with --ollama-models or --openai-models")
+    payload, paths = run_multi_source_holdout_evaluation(
+        specs=specs,
+        output_dir=RESULTS_DIR / "multi_source_holdout",
+        runs=runs,
+        temperature=temperature,
+        max_steps=max_steps,
+        post_task_audit_steps=post_task_audit_steps,
+        timeout=timeout,
+    )
+    for status in payload["model_status"]:
+        print(f"  {status['provider']}:{status['model']}: {status['status']}")
     for label, path in paths.items():
         print(f"{label}: {path}")
 
@@ -417,6 +453,17 @@ def build_parser() -> argparse.ArgumentParser:
     multimodel.add_argument("--max-steps", type=int, default=6)
     multimodel.add_argument("--post-task-audit-steps", type=int, default=2)
     multimodel.add_argument("--timeout", type=float, default=120.0)
+    holdout = sub.add_parser(
+        "evaluate-multi-source-holdout",
+        help="Evaluate baseline, legacy context, and full defense on the multi-source hold-out set",
+    )
+    holdout.add_argument("--ollama-models", default="llama3.1,qwen2.5:7b,mistral-nemo")
+    holdout.add_argument("--openai-models", default="")
+    holdout.add_argument("--runs", type=int, default=1)
+    holdout.add_argument("--temperature", type=float, default=0.0)
+    holdout.add_argument("--max-steps", type=int, default=6)
+    holdout.add_argument("--post-task-audit-steps", type=int, default=2)
+    holdout.add_argument("--timeout", type=float, default=120.0)
     return parser
 
 
@@ -471,6 +518,16 @@ def main(argv: list[str] | None = None) -> None:
             openai_models=args.openai_models,
             variants=args.variants,
             limit=args.limit,
+            runs=args.runs,
+            temperature=args.temperature,
+            max_steps=args.max_steps,
+            post_task_audit_steps=args.post_task_audit_steps,
+            timeout=args.timeout,
+        )
+    elif args.command == "evaluate-multi-source-holdout":
+        command_evaluate_multi_source_holdout(
+            ollama_models=args.ollama_models,
+            openai_models=args.openai_models,
             runs=args.runs,
             temperature=args.temperature,
             max_steps=args.max_steps,

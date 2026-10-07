@@ -9,6 +9,7 @@ import yaml
 from src.defense.history_analyzer import HistoryAnalyzer
 from src.defense.authorization import AuthorizationResolver
 from src.defense.intent_analyzer import IntentAnalyzer
+from src.defense.instruction_provenance import InstructionProvenanceAnalyzer
 from src.defense.risk_engine import RiskEngine
 from src.defense.tool_call_analyzer import ToolCallAnalyzer
 from src.defense.trust_boundary import TrustBoundary
@@ -39,6 +40,7 @@ class PolicyEngine:
         self.tool_calls = ToolCallAnalyzer()
         self.risk = RiskEngine(self.policy)
         self.authorization = AuthorizationResolver()
+        self.instruction_provenance = InstructionProvenanceAnalyzer()
 
     def evaluate(self, context: SecurityContext, call: ToolCall) -> SecurityDecision:
         meta = context.proposed_tool
@@ -77,6 +79,15 @@ class PolicyEngine:
         untrusted_scope_expansion = (
             self.features.use_scoped_authorization and untrusted_authorization.matched and not scoped
         )
+        instruction_provenance = self.instruction_provenance.assess(
+            call,
+            context.external_content_sources,
+        )
+        composed_scope_expansion = (
+            self.features.use_scoped_authorization
+            and instruction_provenance.composed_untrusted_instruction
+            and not scoped
+        )
         score = self.risk.score(
             meta.risk_level,
             suspicious=suspicious,
@@ -106,6 +117,12 @@ class PolicyEngine:
         if untrusted_scope_expansion:
             rules.append("UNTRUSTED_SCOPE_EXPANSION_DENY")
             reasons.append("Untrusted content requested a Tool call outside trusted user/task authorization scope")
+        if composed_scope_expansion:
+            rules.append("MULTI_SOURCE_SCOPE_EXPANSION_DENY")
+            reasons.append(
+                "Multiple untrusted sources supplied complementary instruction components "
+                "for a Tool call outside trusted user/task authorization scope"
+            )
         if high_risk and mismatch and not scoped:
             rules.append("HIGH_RISK_REQUIRES_INTENT")
             reasons.append("High-risk tool is unrelated to the original user intent")
@@ -123,6 +140,7 @@ class PolicyEngine:
             "SECRET_TO_NETWORK_DENY", "SECRET_REQUIRES_EXPLICIT_INTENT", "UNTRUSTED_HIGH_RISK_DENY",
             "HIGH_RISK_REQUIRES_INTENT", "SHELL_ALLOWLIST_ONLY",
             "UNTRUSTED_SCOPE_EXPANSION_DENY",
+            "MULTI_SOURCE_SCOPE_EXPANSION_DENY",
             "SECURITY_CONTROL_SCOPE_DENY",
         })
         if hard_deny:
@@ -153,6 +171,9 @@ class PolicyEngine:
                 if sensitive_egress_scoped and sensitive_egress_authorization
                 else authorization.source if scoped else None
             ),
+            instruction_provenance_sources=instruction_provenance.contributing_sources,
+            instruction_provenance_components=instruction_provenance.source_components,
+            composed_untrusted_instruction=instruction_provenance.composed_untrusted_instruction,
         )
 
     def _security_control_mutation(self, call: ToolCall) -> bool:

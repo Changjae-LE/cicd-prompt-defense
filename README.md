@@ -197,6 +197,8 @@ Each grant can constrain allowed Tools, resources, actions, destinations, purpos
 
 When an untrusted document requests a call outside trusted scope, `UNTRUSTED_SCOPE_EXPANSION_DENY` applies even if the lexical suspicious-content detector misses the wording. When an exact trusted grant covers a call, `SCOPED_USER_AUTHORIZATION` may resolve `UNTRUSTED_HIGH_RISK_DENY`; this does not suppress an independent sequence/exfiltration deny.
 
+Cross-document instruction provenance complements this exact matching. For each proposed high-risk call it records which untrusted sources supplied semantic components such as destination origin, payload action, sensitive material, mutation target, security change, resource target, or execution action. `MULTI_SOURCE_SCOPE_EXPANSION_DENY` applies only when at least two untrusted sources provide complementary components and no exact trusted user/policy grant covers the call. Matching a URL origin is intentional: changing `/receipt` to `/rollout` does not erase the provenance of a destination learned from an untrusted document. Trusted-user and trusted-policy content is never counted as untrusted composition evidence.
+
 `evaluate-authorization` compares the legacy and scoped policy over the unchanged 128-attack/120-benign dataset and separately evaluates four fixed resource, destination, fake-delegation, and Tool-expansion attacks. It writes `results/authorization_results.json`, `results/authorization_results.csv`, and `results/authorization_report.md`.
 
 ## Goal-aware termination and research audit
@@ -309,6 +311,18 @@ python -m src.cli evaluate-multimodel `
   --limit 20 `
   --runs 3
 ```
+
+Run the separate seven-scenario multi-source hold-out across the three default local models:
+
+```powershell
+python -m src.cli evaluate-multi-source-holdout `
+  --ollama-models llama3.1,qwen2.5:7b,mistral-nemo `
+  --runs 1 `
+  --temperature 0 `
+  --max-steps 6
+```
+
+This writes aggregate and per-scenario outputs under `results/multi_source_holdout/`. The set covers repository Markdown, YAML, logs, PR/web comments, and Tool outputs across secret egress, callbacks, RBAC, scanner weakening, destructive cleanup, shell execution, and credential access. It is separate from the existing balanced 20-scenario regression but was authored in the same development cycle, so it is a mechanism-oriented hold-out rather than a blinded external benchmark.
 
 Optional OpenAI models can be included with `--openai-models MODEL_A,MODEL_B`. If `OPENAI_API_KEY` is absent, their status is recorded as unavailable and no request is made.
 
@@ -445,6 +459,7 @@ Each trace has a UUID, user request, retrieved content and trust label, proposed
 - Conservative policy can produce false positives or approval friction.
 - Simulated CI/CD tools do not reproduce production infrastructure, identities, race conditions, or side effects.
 - Security decisions depend on correct content provenance and trust labeling.
+- Instruction provenance uses deterministic semantic components and URL origins; paraphrases outside its vocabulary, compromised source labels, covert channels, and single-document instructions remain outside this specific composition rule.
 - Pattern detection does not cover every language, encoding, or adaptive attack.
 - Synthetic results may not transfer to unseen repositories or models.
 - Template variants are correlated and are not independent samples from a deployment population.

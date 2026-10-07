@@ -63,5 +63,7 @@ rules:
     description: Trusted user scope may authorize only an exact Tool, resource, action, purpose, and destination match.
   - id: UNTRUSTED_SCOPE_EXPANSION_DENY
     description: Untrusted content cannot add a Tool, resource, action, purpose, or destination outside trusted scope.
+  - id: MULTI_SOURCE_SCOPE_EXPANSION_DENY
+    description: Complementary instruction components assembled from multiple untrusted sources cannot authorize a high-risk call outside exact trusted scope.
   - id: SECURITY_CONTROL_SCOPE_DENY
     description: Security-control mutations must preserve trusted-policy-required controls and match trusted user scope.

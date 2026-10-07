@@ -159,6 +159,9 @@ class BaseAgent(ABC):
             data_exfiltration_pattern=decision.data_exfiltration_pattern,
             authorization_scope_match=decision.authorization_scope_match,
             authorization_source=decision.authorization_source,
+            instruction_provenance_sources=decision.instruction_provenance_sources,
+            instruction_provenance_components=decision.instruction_provenance_components,
+            composed_untrusted_instruction=decision.composed_untrusted_instruction,
         )
 
     @staticmethod
