@@ -16,10 +16,14 @@ from src.agent.context_aware_agent import ContextAwareAgent
 from src.agent.goal_aware_agent import GoalAwareContextAgent, GoalAwareMode
 from src.agent.input_filter_agent import InputFilterAgent
 from src.agent.provenance_agent import ProvenanceGoalAwareAgent
-from src.defense.authorization import AuthorizationResolver
 from src.defense.decision_engine import DecisionEngine
 from src.defense.policy_engine import PolicyEngine, PolicyFeatures
 from src.evaluation.extended_dataset import extended_dataset_fingerprint, load_extended_scenarios
+from src.evaluation.grounding import (
+    aggregate_grounding_metrics,
+    analyze_grounding,
+    is_goal_relevant_call,
+)
 from src.evaluation.llm_runner import INFRASTRUCTURE_FAILURES, build_provider, select_scenarios
 from src.models.schemas import Decision, ExecutionPhase, GoalStatus, RiskLevel, Scenario, TaskResult, ToolCall
 from src.providers.base import LLMProvider, ProviderError
@@ -135,24 +139,7 @@ def _predicted_attack(result: TaskResult) -> bool:
 
 
 def _goal_relevant_call(scenario: Scenario, call: ToolCall) -> bool:
-    if call.tool_name not in scenario.expected_safe_tools:
-        return False
-    if any(
-        not planned.is_malicious
-        and planned.tool_name == call.tool_name
-        and planned.arguments == call.arguments
-        for planned in scenario.proposed_calls
-    ):
-        return True
-    registry = build_default_registry(FakeEnvironment())
-    policy = PolicyEngine()
-    grants = AuthorizationResolver().resolve(
-        scenario.user_request,
-        scenario.external_content,
-        registry.list_metadata(),
-        security_policy=policy.policy,
-    )
-    return AuthorizationResolver().match(grants, call).matched
+    return is_goal_relevant_call(scenario, call)
 
 
 def _operational_block(scenario: Scenario, result: TaskResult) -> bool:
@@ -220,6 +207,7 @@ def _run_metrics(variant: str, scenarios: list[Scenario], results: list[TaskResu
         else result.task_completed
         for result in results
     )
+    grounding_metrics = aggregate_grounding_metrics(variant, scenarios, results)
     return {
         "attack_success_rate": sum(result.attack_succeeded for result in attacks) / max(1, len(attacks)),
         "false_positive_rate": false_positive / max(1, len(benign)),
@@ -264,6 +252,7 @@ def _run_metrics(variant: str, scenarios: list[Scenario], results: list[TaskResu
         "repeated_failure_termination_rate": sum(
             result.termination_reason.value == "REPEATED_FAILED_TOOL_CALL" for result in results
         ) / max(1, len(results)),
+        **grounding_metrics,
     }
 
 
@@ -355,6 +344,7 @@ def _outcome(mode: str, run: int, variant: str, scenario: Scenario, result: Task
         if variant in {"goal-aware", "full"}
         else result.task_completed
     )
+    grounding = analyze_grounding(scenario, result, variant)
     return {
         "evaluation_mode": mode,
         "run": run,
@@ -368,6 +358,10 @@ def _outcome(mode: str, run: int, variant: str, scenario: Scenario, result: Task
         "goal_status": result.goal_status.value,
         "termination_reason": result.termination_reason.value,
         "provider_error_code": result.provider_error_code,
+        "failure_owner": grounding["failure_owner"],
+        "grounding_failure_type": grounding["grounding_failure_type"],
+        "grounding_failure_types": grounding["grounding_failure_types"],
+        "grounding_analysis": grounding,
         "llm_calls": result.llm_calls,
         "input_tokens": result.input_tokens,
         "output_tokens": result.output_tokens,
@@ -459,6 +453,20 @@ def evaluate_available_model(
     end_results = [outcome for outcome in outcomes if outcome["evaluation_mode"] == "end_to_end"]
     termination_counts = Counter(outcome["termination_reason"] for outcome in end_results)
     full_end_results = [outcome for outcome in end_results if outcome["defense"] == "full"]
+    failure_attribution = [
+        {
+            "scenario_id": outcome["scenario_id"],
+            "defense": outcome["defense"],
+            "failure_owner": outcome["failure_owner"],
+            "grounding_failure_type": outcome["grounding_failure_type"],
+            "grounding_failure_types": outcome["grounding_failure_types"],
+            "expected_actions": outcome["grounding_analysis"]["expected_actions"],
+            "actual_actions": outcome["grounding_analysis"]["call_assessments"],
+            "termination_reason": outcome["termination_reason"],
+        }
+        for outcome in end_results
+        if outcome["kind"] == "benign" and not outcome["utility_completed"]
+    ]
     failure_analysis = {
         "full_stack_attack_success_scenarios": sorted({
             outcome["scenario_id"] for outcome in full_end_results
@@ -506,6 +514,7 @@ def evaluate_available_model(
             "termination_counts": dict(sorted(termination_counts.items())),
         },
         "failure_analysis": failure_analysis,
+        "failure_attribution": failure_attribution,
         "outcomes": outcomes,
     })
 
@@ -638,7 +647,7 @@ def run_multimodel_evaluation(
             "automatic_model_installation": False,
         },
         "model_status": [
-            {key: value for key, value in model.items() if key not in {"metrics", "model_behavior", "compatibility", "failure_analysis", "outcomes"}}
+            {key: value for key, value in model.items() if key not in {"metrics", "model_behavior", "compatibility", "failure_analysis", "failure_attribution", "outcomes"}}
             | {"compatibility": model.get("compatibility", {})}
             for model in model_payloads
         ],
@@ -652,6 +661,16 @@ def run_multimodel_evaluation(
                 **model.get("failure_analysis", {}),
             }
             for model in model_payloads if model.get("status") == "available"
+        ],
+        "failure_attribution": [
+            {
+                "provider": model["provider"],
+                "model": model["model"],
+                **item,
+            }
+            for model in model_payloads
+            if model.get("status") == "available"
+            for item in model.get("failure_attribution", [])
         ],
         "model_result_files": model_files,
     })
@@ -684,6 +703,7 @@ def _write_outputs(payload: dict[str, Any], model_payloads: list[dict[str, Any]]
     controlled_json = output_dir / "controlled_summary.json"
     controlled_csv = output_dir / "controlled_summary.csv"
     graph_csv = output_dir / "multimodel_graph_data.csv"
+    grounding_failures_csv = output_dir / "grounding_failures.csv"
     summary_json.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     _write_csv(summary_csv, payload["metrics"])
     controlled_rows = [row for row in payload["metrics"] if row["evaluation_mode"] == "controlled"]
@@ -718,6 +738,13 @@ def _write_outputs(payload: dict[str, Any], model_payloads: list[dict[str, Any]]
             "benign_completion": row["benign_completion_rate_mean"],
             "exfiltration_detection": row["exfiltration_detection_rate_mean"],
             "post_goal_block_rate": row["post_goal_block_rate_mean"],
+            "tool_selection_accuracy": row["tool_selection_accuracy_mean"],
+            "resource_grounding_accuracy": row["resource_grounding_accuracy_mean"],
+            "argument_validity_rate": row["argument_validity_rate_mean"],
+            "goal_relevant_tool_rate": row["goal_relevant_tool_rate_mean"],
+            "hallucinated_resource_rate": row["hallucinated_resource_rate_mean"],
+            "unnecessary_high_risk_action_rate": row["unnecessary_high_risk_action_rate_mean"],
+            "grounding_failure_rate": row["grounding_failure_rate_mean"],
             "tokens": row["total_tokens_mean"],
             "latency_ms": row["average_latency_ms_mean"],
             "asr_relative_reduction_baseline_to_full": improvement.get("asr_relative_reduction"),
@@ -725,6 +752,33 @@ def _write_outputs(payload: dict[str, Any], model_payloads: list[dict[str, Any]]
             "benign_completion_change_baseline_to_full": improvement.get("benign_completion_change"),
         })
     _write_csv(graph_csv, graph_rows)
+    grounding_rows = []
+    for item in payload.get("failure_attribution", []):
+        expected = "; ".join(
+            f"{action['tool']}({action.get('resource') or '-'})"
+            for action in item["expected_actions"]
+        )
+        actual = "; ".join(
+            f"{action['actual_tool']}({action.get('actual_resource') or '-'})"
+            for action in item["actual_actions"]
+        )
+        decisions = ",".join(dict.fromkeys(
+            action["defense_decision"] for action in item["actual_actions"]
+        ))
+        grounding_rows.append({
+            "provider": item["provider"],
+            "model": item["model"],
+            "defense": item["defense"],
+            "scenario_id": item["scenario_id"],
+            "expected_action": expected,
+            "actual_tool_resource": actual,
+            "failure_owner": item["failure_owner"],
+            "grounding_failure_type": item["grounding_failure_type"],
+            "grounding_failure_types": ",".join(item["grounding_failure_types"]),
+            "defense_decision": decisions,
+            "termination_reason": item["termination_reason"],
+        })
+    _write_csv(grounding_failures_csv, grounding_rows)
     report.write_text(_render_report(payload), encoding="utf-8")
     return {
         "summary_json": summary_json,
@@ -733,11 +787,16 @@ def _write_outputs(payload: dict[str, Any], model_payloads: list[dict[str, Any]]
         "controlled_json": controlled_json,
         "controlled_csv": controlled_csv,
         "graph_csv": graph_csv,
+        "grounding_failures_csv": grounding_failures_csv,
     }
 
 
 def _pct(value: Any) -> str:
     return "n/a" if value is None else f"{float(value):.1%}"
+
+
+def _report_cell(value: Any) -> str:
+    return str(value).replace("|", "\\|").replace("\n", " ")
 
 
 def _render_report(payload: dict[str, Any]) -> str:
@@ -823,6 +882,70 @@ def _render_report(payload: dict[str, Any]) -> str:
             f"{_pct(row['first_call_high_risk_rate_mean'])} | {_pct(row['normal_tool_selection_rate_mean'])} | "
             f"{_pct(row['tool_schema_adherence_rate_mean'])} | {_pct(row['post_goal_extra_tool_rate_mean'])} | "
             f"{_pct(row['inferred_self_refusal_rate_mean'])} |"
+        )
+
+    lines.extend([
+        "",
+        "## Agent Grounding Evaluation",
+        "",
+        "Grounding metrics use benign TASK_EXECUTION proposals only; post-goal research-audit calls are excluded.",
+        "",
+        "| Model | Defense | Tool selection | Resource grounding | Argument validity | Goal-relevant Tool | Hallucinated resource | Unnecessary high-risk | Grounding failure |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|",
+    ])
+    for row in payload["metrics"]:
+        if row["evaluation_mode"] != "end_to_end":
+            continue
+        lines.append(
+            f"| {row['model']} | {row['defense']} | {_pct(row['tool_selection_accuracy_mean'])} | "
+            f"{_pct(row['resource_grounding_accuracy_mean'])} | {_pct(row['argument_validity_rate_mean'])} | "
+            f"{_pct(row['goal_relevant_tool_rate_mean'])} | {_pct(row['hallucinated_resource_rate_mean'])} | "
+            f"{_pct(row['unnecessary_high_risk_action_rate_mean'])} | {_pct(row['grounding_failure_rate_mean'])} |"
+        )
+
+    full_attribution = [
+        item for item in payload.get("failure_attribution", [])
+        if item["defense"] == "full"
+    ]
+    lines.extend([
+        "",
+        "## Failure Attribution",
+        "",
+        "Only incomplete benign Full-Defense End-to-End tasks are listed below.",
+        "",
+        "| Model | Defense | Incomplete | Defense | Agent grounding | Tool compatibility | Model behavior | Environment |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
+    ])
+    for model in [item["model"] for item in payload["model_status"] if item["status"] == "available"]:
+        items = [item for item in full_attribution if item["model"] == model]
+        counts = Counter(item["failure_owner"] for item in items)
+        lines.append(
+            f"| {_report_cell(model)} | full | {len(items)} | {counts['DEFENSE']} | "
+            f"{counts['AGENT_GROUNDING']} | {counts['TOOL_COMPATIBILITY']} | "
+            f"{counts['MODEL_BEHAVIOR']} | {counts['ENVIRONMENT']} |"
+        )
+    lines.extend([
+        "",
+        "| Model | Scenario | Expected action | Actual Tool/resource | Owner | Grounding type | Defense decision | Termination |",
+        "|---|---|---|---|---|---|---|---|",
+    ])
+    for item in full_attribution:
+        expected = "; ".join(
+            f"{action['tool']}({action.get('resource') or '-'})"
+            for action in item["expected_actions"]
+        ) or "-"
+        actual = "; ".join(
+            f"{action['actual_tool']}({action.get('actual_resource') or '-'})"
+            for action in item["actual_actions"]
+        ) or "no Tool proposal"
+        decisions = ", ".join(dict.fromkeys(
+            action["defense_decision"] for action in item["actual_actions"]
+        )) or "-"
+        types = ", ".join(item["grounding_failure_types"]) or "-"
+        lines.append(
+            f"| {_report_cell(item['model'])} | {_report_cell(item['scenario_id'])} | "
+            f"{_report_cell(expected)} | {_report_cell(actual)} | {_report_cell(item['failure_owner'])} | "
+            f"{_report_cell(types)} | {_report_cell(decisions)} | {_report_cell(item['termination_reason'])} |"
         )
 
     lines.extend(["", "## Full Stack observed failures", ""])
