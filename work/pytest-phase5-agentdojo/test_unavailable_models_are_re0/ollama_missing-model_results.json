@@ -1,0 +1,13 @@
+{
+  "provider": "ollama",
+  "model": "missing-model",
+  "status": "unavailable",
+  "reason": "test model is not installed",
+  "installation_command": "ollama pull missing-model",
+  "metrics": [],
+  "model_behavior": {},
+  "compatibility": {
+    "tool_calling_support": "unverified"
+  },
+  "outcomes": []
+}

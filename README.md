@@ -235,6 +235,33 @@ $env:OPENAI_API_KEY = "your-key"
 
 Without `OPENAI_API_KEY`, no model call or fallback occurs. The runner still records the frozen manifest and writes an explicit `blocked_missing_api_key` report. Outputs are `qualification_summary.json`, `qualification_cases.csv`, `defense_comparison_summary.json`, `defense_comparison_cases.csv`, and `validation_report.md`; the earlier Ollama pilot remains unchanged.
 
+#### Phase 4 broader validation
+
+Phase 4 freezes the Phase 3 defense implementation and selects a deterministic, domain-stratified prefix from all injectable AgentDojo v1.2.2 cases with non-empty native Tool ground truth. The original 17 signal-enriched cases are excluded from the broader sample and remain a separately reported reference. A single Baseline proposal source is persisted and replayed unchanged through `context-aware`, Phase 2 `full`, and `refined-full`.
+
+Run the 20-case validity smoke first:
+
+```powershell
+$env:PYTHONUTF8 = "1"
+.\.venv-agentdojo\Scripts\python.exe -m src.integrations.agentdojo.phase4 `
+  --model gpt-4o-mini-2024-07-18 --temperature 0 `
+  --limit 20 --runs 1 --stage smoke `
+  --max-error-rate 0.05 `
+  --output-dir results/agentdojo/phase4/smoke
+```
+
+Only when the smoke has no exact-model, ground-truth, proposal-source, provider, parsing, replay, or tool-integration validity warning should the same frozen selector be extended to `--limit 50 --stage broader`. Token prices are explicit CLI parameters (`--input-price-per-million` and `--output-price-per-million`). The API key is read from the environment and is never serialized.
+
+Phase 5 separates provider/parsing/adapter failures from native benchmark outcomes such as empty searches and missing entities. It preserves AgentDojo's raw Tool error feedback and adds structured outcomes only to evaluation artifacts. The original 5% provider/integration gate remains unchanged; benchmark-runtime outcomes produce an interpretation warning above 10% and block broader resumption above 25%.
+
+```powershell
+$env:PYTHONUTF8 = "1"
+.\.venv-agentdojo\Scripts\python.exe -m src.integrations.agentdojo.phase5 `
+  --model gpt-4o-mini-2024-07-18 --temperature 0 `
+  --phase4-dir results/agentdojo/phase4/smoke `
+  --output-dir results/agentdojo/phase5
+```
+
 The runner exposes a full-combination command for a later, separately authorized run, but it was not executed for this evaluation:
 
 ```powershell

@@ -1,0 +1,5 @@
+provider,model,evaluation_mode,defense,asr,asr_std,fpr,operational_fpr,benign_completion,exfiltration_detection,post_goal_block_rate,tool_selection_accuracy,resource_grounding_accuracy,argument_validity_rate,goal_relevant_tool_rate,hallucinated_resource_rate,unnecessary_high_risk_action_rate,grounding_failure_rate,tokens,latency_ms,asr_relative_reduction_baseline_to_full,fpr_change_baseline_to_full,benign_completion_change_baseline_to_full
+test,model-one,end_to_end,baseline,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0,80.0,0.03488750371616334,,0.5,0.0
+test,model-one,end_to_end,full,0.0,0.0,0.5,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0,80.0,0.6972750052227639,,0.5,0.0
+test,model-one,controlled,baseline,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0,0.0,0.02846249844878912,,0.5,0.0
+test,model-one,controlled,full,0.0,0.0,0.5,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0,0.0,0.6828250043326989,,0.5,0.0
